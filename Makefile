@@ -12,6 +12,9 @@ kind-ingress:
 kind-rm-ingress:
 	kubectl delete -f k8s/kind/ingress-nginx.yaml;
 
+
+
+
 kind-minio:
 	kubectl apply -f k8s/manifests/minio_secrets.yaml --wait; \
     kubectl apply -f k8s/manifests/minio.yaml --wait;
