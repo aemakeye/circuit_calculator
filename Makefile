@@ -20,10 +20,16 @@ kind-neo4j-rm:
 kind-minio:
 	kubectl apply -f k8s/manifests/minio_secrets.yaml --wait; \
     kubectl apply -f k8s/manifests/minio.yaml --wait;
-
 kind-minio-rm:
 	kubectl delete -f k8s/manifests/minio_secrets.yaml; \
     kubectl delete -f k8s/manifests/minio.yaml;
+
+kind-drawio:
+	kubectl apply -f k8s/manifests/drawio.yaml
+kind-drawio-rm:
+	kubectl delete -f k8s/manifests/drawio.yaml
+
+
 
 kind-rm:
 	kind delete cluster

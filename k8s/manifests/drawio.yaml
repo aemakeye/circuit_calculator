@@ -2,13 +2,13 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: drawio
+  name: circuit-calculator
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: drawio
-  namespace: drawio
+  namespace: circuit-calculator
   labels:
     app: draw.io
 spec:
@@ -27,7 +27,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: drawio
-  namespace: drawio
+  namespace: circuit-calculator
 spec:
   replicas: 1
   selector:
@@ -49,7 +49,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: drawio
-  namespace: drawio
+  namespace: circuit-calculator
   annotations:
     kubernetes.io/ingress.class: nginx
 spec:
