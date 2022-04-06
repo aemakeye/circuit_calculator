@@ -1,0 +1,124 @@
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: neo4j
+  namespace: circuit-calculator
+  labels:
+    app: neo4j
+spec:
+  selector:
+    matchLabels:
+      app: neo4j
+  serviceName: neo4j
+  template:
+    metadata:
+      labels:
+        app: neo4j
+    spec:
+      containers:
+        - name: neo4j
+          env:
+            - name: NEO4J_AUTH
+              valueFrom:
+                secretKeyRef:
+                  key: credentials
+                  name: neo4jcredentials
+          image: neo4j:4.4.5-community
+          ports:
+            - containerPort: 7474
+              hostPort: 7474
+            - containerPort: 7687
+              hostPort: 7687
+          volumeMounts:
+            - mountPath: /data
+              name: data
+            - mountPath: /var/lib/neo4j/conf
+              name: conf
+            - mountPath: /logs
+              name: logs
+            - mountPath: /var/lib/neo4j/import
+              name: import
+            - mountPath: /plugins
+              name: plugins
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
+    - metadata:
+        name: conf
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 10Mi
+    - metadata:
+        name: logs
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 500Mi
+    - metadata:
+        name: import
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 50Mi
+    - metadata:
+        name: plugins
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 200Mi
+...
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: neo4j
+  namespace: circuit-calculator
+spec:
+  selector:
+    app: neo4j
+  ports:
+    - name: neo4jweb
+      port: 7474
+      protocol: TCP
+      targetPort: 7474
+    - name: bolt
+      port: 7687
+      protocol: TCP
+      targetPort: 7687
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: neo4j
+  namespace: circuit-calculator
+  annotations:
+    kubernetes.io/ingress.class: nginx
+spec:
+  rules:
+    - host: neo4j.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: neo4j
+                port:
+                  number: 7474
