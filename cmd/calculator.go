@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/HeOpuHaMeH9I/CircuitCalculator/internal/config"
+
 	"go.uber.org/zap"
 	"os"
 	//"github.com/HeOpuHaMeH9I/CirquitCalculator/internal/shutdown/shutdown.go"
