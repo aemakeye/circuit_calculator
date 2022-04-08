@@ -1,2 +1,12 @@
+log_level: debug
 neo4j:
-  url:
+  host: localhost
+  port: 7687
+  user: neo4j
+  password: password
+
+minio:
+  host: localhost
+  port: 1234
+  user: minio
+  password: password
