@@ -1,4 +1,4 @@
-log_level: debug
+loglevel: debug
 neo4j:
   host: localhost
   port: 7687
