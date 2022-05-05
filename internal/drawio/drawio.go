@@ -13,6 +13,7 @@ type DiagramBuilder struct {
 type Mxfile struct {
 	//XMLName xml.Name `xml:"host,attr"`
 	Diagram struct {
+		Id           string `xml:"id,attr"`
 		MxGraphModel struct {
 			Root struct {
 				MxCells []MxCell `xml:"mxCell"`
@@ -22,7 +23,10 @@ type Mxfile struct {
 }
 
 type MxCell struct {
-	Shape shape `xml:"style,attr"`
+	Id     int    `xml:"id,attr"`
+	Shape  shape  `xml:"style,attr"`
+	Source string `xml:"source,attr"`
+	Target string `xml:"target,attr"`
 }
 
 type shape struct {
@@ -41,15 +45,3 @@ func (sh *shape) UnmarshalXMLAttr(attr xml.Attr) error {
 	}
 	return nil
 }
-
-//type Diagram struct {
-//	Elements *[]Element
-//	UUID     string
-//}
-//
-//type Element struct {
-//	Shape  string
-//	XmlId  int
-//	Source int
-//	Target int
-//}

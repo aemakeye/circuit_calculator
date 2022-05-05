@@ -3,6 +3,7 @@ package drawio
 import (
 	"encoding/xml"
 	"github.com/stretchr/testify/assert"
+	"reflect"
 	"testing"
 )
 
@@ -60,19 +61,16 @@ func TestXMLBasic(t *testing.T) {
 </mxfile>
 `)
 
-	tests := []struct {
-		name string
-	}{
-		{
-			"import xml",
-		},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			//logger := zap.NewNop()
-			D := &Mxfile{}
-			err := xml.Unmarshal(diagram, D)
-			assert.NoError(t, err)
-		})
-	}
+	t.Run("test import", func(t *testing.T) {
+		//logger := zap.NewNop()
+		D := &Mxfile{}
+		err := xml.Unmarshal(diagram, D)
+		assert.NoError(t, err)
+	})
+	t.Run("get diagram id and check type is int", func(t *testing.T) {
+		D := &Mxfile{}
+		_ = xml.Unmarshal(diagram, D)
+		assert.Equal(t, "uweCVhkyVy6MirBnUyNJ", D.Diagram.Id)
+		assert.IsType(t, reflect.TypeOf(0), reflect.TypeOf(D.Diagram.MxGraphModel.Root.MxCells[5].Id))
+	})
 }
