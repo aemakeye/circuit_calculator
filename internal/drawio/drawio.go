@@ -2,12 +2,21 @@ package drawio
 
 import (
 	"encoding/xml"
+	"fmt"
 	"go.uber.org/zap"
+	"strconv"
 	"strings"
 )
 
+var KnownEEKinds = map[string]struct{}{
+	"resistors":  struct{}{},
+	"capacitors": {},
+	"inductors":  {},
+}
+
 type DiagramBuilder struct {
 	Logger *zap.Logger
+	Mxfile *Mxfile
 }
 
 type Mxfile struct {
@@ -24,24 +33,81 @@ type Mxfile struct {
 
 type MxCell struct {
 	Id     int    `xml:"id,attr"`
-	Shape  shape  `xml:"style,attr"`
-	Source string `xml:"source,attr"`
-	Target string `xml:"target,attr"`
+	Style  style  `xml:"style,attr"`
+	Value  string `xml:"value,attr"`
+	Source int    `xml:"source,attr,omitempty"`
+	Target int    `xml:"target,attr,omitempty"`
 }
 
-type shape struct {
-	shape string
-	style string
+type style struct {
+	attrs map[string]string
 }
 
-func (sh *shape) UnmarshalXMLAttr(attr xml.Attr) error {
+func (sh *style) UnmarshalXMLAttr(attr xml.Attr) error {
 	attrList := strings.Split(attr.Value, ";")
-	*sh = shape{shape: "", style: attr.Value}
-	for a := range attrList {
-		s := strings.Split(attrList[a], "=")
-		if s[0] == "shape" {
-			sh.shape = s[1]
+	//*sh = style{shape: "", style: attr.Value}
+	attrMap := make(map[string]string)
+	for i := range attrList {
+		k, v := func(as string) (string, string) {
+			x := strings.Split(as, "=")
+			if len(x) == 2 {
+				return x[0], x[1]
+			} else {
+				return "", ""
+			}
+		}(attrList[i])
+		if k != "" {
+			attrMap[k] = v
 		}
 	}
+	sh.attrs = attrMap
 	return nil
+}
+
+func NewDTO(mx *MxCell, uuid string) (interface{}, error) {
+	if shape, ok := mx.Style.attrs["shape"]; ok {
+		shapeNameArr := strings.Split(shape, ".")
+		shapeNameKind := shapeNameArr[len(shapeNameArr)-2]
+		el := EElementDTO{
+			UUID:  uuid,
+			ID:    mx.Id,
+			Value: mx.Value,
+			Kind:  shapeNameKind,
+			Type:  shapeNameArr[len(shapeNameArr)-1],
+		}
+		if kind, kok := KnownEEKinds[el.Kind]; !kok {
+			return nil, fmt.Errorf("unsupported kind of element %s (id %d)", kind, mx.Id)
+		}
+		return el, nil
+	}
+	// if mx is a line
+	if _, ok := mx.Style.attrs["endArrow"]; ok {
+
+		if mx.Source == 0 {
+			return nil, fmt.Errorf("no source in line attributes (id: %d)", mx.Id)
+		}
+
+		if mx.Target == 0 {
+			return nil, fmt.Errorf("no target in line attributes (id: %d)", mx.Id)
+		}
+
+		// i believe line has exit/entry attributes when both source and target are set
+		ExitX, _ := strconv.ParseFloat(mx.Style.attrs["exitX"], 32)
+		ExitY, _ := strconv.ParseFloat(mx.Style.attrs["exitY"], 32)
+		EntryX, _ := strconv.ParseFloat(mx.Style.attrs["entryX"], 32)
+		EntryY, _ := strconv.ParseFloat(mx.Style.attrs["entryY"], 32)
+
+		el := Line{
+			UUID:     uuid,
+			ID:       mx.Id,
+			SourceId: mx.Source,
+			TargetId: mx.Target,
+			ExitX:    float32(ExitX),
+			ExitY:    float32(ExitY),
+			EntryX:   float32(EntryX),
+			EntryY:   float32(EntryY),
+		}
+		return el, nil
+	}
+	return nil, fmt.Errorf("unknown element (id: %d)", mx.Id)
 }
