@@ -21,6 +21,8 @@ type neo4j struct {
 	User     string
 	Password string
 	Endpoint string
+	//play with this and Neo4j structure
+	//Timeout  time.Duration
 }
 
 // minio internal structure
@@ -37,6 +39,9 @@ type Neo4j struct {
 	Host     string
 	Port     string
 	Schema   string
+	// TODO play with this
+	//Timeout  time.Duration `yaml:"timeout" json:"timeout"`
+
 }
 
 // Minio structure to unmarshal CConfig file

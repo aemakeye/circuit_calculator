@@ -1,11 +1,16 @@
-package drawio
+package neo4j
 
-type ItemDTO struct {
+type NodeDTO struct {
 	UUID     string
 	ID       int
 	Value    string
 	Class    string
 	SubClass string
+}
+
+type RelationDTO struct {
+	UUID     string
+	ID       int
 	SourceId int
 	TargetId int
 	ExitX    float32

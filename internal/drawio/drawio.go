@@ -1,28 +1,45 @@
 package drawio
 
 import (
+	"bytes"
+	"context"
 	"encoding/xml"
 	"fmt"
+	"github.com/aemakeye/circuit_calculator/internal/calculator"
 	"go.uber.org/zap"
+	"io/ioutil"
 	"strconv"
 	"strings"
+	"sync"
 )
 
-var KnownEEKinds = map[string]struct{}{
+var ItemAvailableClass = map[string]struct{}{
 	"resistors":  struct{}{},
 	"capacitors": {},
 	"inductors":  {},
+	"lines":      {},
 }
 
-type DiagramBuilder struct {
-	Logger *zap.Logger
-	Mxfile *Mxfile
+type Controller struct {
+	logger *zap.Logger
+}
+
+var instance *Controller
+var once sync.Once
+
+func NewController(logger *zap.Logger) *Controller {
+	once.Do(func() {
+		logger.Info("creating drawio controller instance")
+		instance = &Controller{logger: logger}
+	})
+	return instance
 }
 
 type Mxfile struct {
 	//XMLName xml.Name `xml:"host,attr"`
 	Diagram struct {
-		Id           string `xml:"id,attr"`
+		Id string `xml:"id,attr"`
+		//TODO: try "a>b>c" read.go 70 with branch
 		MxGraphModel struct {
 			Root struct {
 				MxCells []MxCell `xml:"mxCell"`
@@ -32,11 +49,15 @@ type Mxfile struct {
 }
 
 type MxCell struct {
-	Id     int    `xml:"id,attr"`
-	Style  style  `xml:"style,attr"`
-	Value  string `xml:"value,attr"`
-	Source int    `xml:"source,attr,omitempty"`
-	Target int    `xml:"target,attr,omitempty"`
+	Id     int     `xml:"id,attr"`
+	Style  style   `xml:"style,attr"`
+	Value  string  `xml:"value,attr"`
+	Source int     `xml:"source,attr,omitempty"`
+	Target int     `xml:"target,attr,omitempty"`
+	ExitX  float32 `xml:"exitX,attr,omitempty"`
+	ExitY  float32 `xml:"exitY,attr,omitempty"`
+	EntryX float32 `xml:"entryX,attr,omitempty"`
+	EntryY float32 `xml:"entryY,attr,omitempty"`
 }
 
 type style struct {
@@ -45,7 +66,6 @@ type style struct {
 
 func (sh *style) UnmarshalXMLAttr(attr xml.Attr) error {
 	attrList := strings.Split(attr.Value, ";")
-	//*sh = style{shape: "", style: attr.Value}
 	attrMap := make(map[string]string)
 	for i := range attrList {
 		k, v := func(as string) (string, string) {
@@ -64,50 +84,93 @@ func (sh *style) UnmarshalXMLAttr(attr xml.Attr) error {
 	return nil
 }
 
-func NewDTO(mx *MxCell, uuid string) (interface{}, error) {
+func NewItemDTO(mx *MxCell, uuid string) *ItemDTO {
+	item := ItemDTO{
+		UUID:  uuid,
+		ID:    mx.Id,
+		Value: mx.Value,
+	}
+
 	if shape, ok := mx.Style.attrs["shape"]; ok {
 		shapeNameArr := strings.Split(shape, ".")
-		shapeNameKind := shapeNameArr[len(shapeNameArr)-2]
-		el := EElementDTO{
-			UUID:  uuid,
-			ID:    mx.Id,
-			Value: mx.Value,
-			Kind:  shapeNameKind,
-			Type:  shapeNameArr[len(shapeNameArr)-1],
-		}
-		if kind, kok := KnownEEKinds[el.Kind]; !kok {
-			return nil, fmt.Errorf("unsupported kind of element %s (id %d)", kind, mx.Id)
-		}
-		return el, nil
+		item.Class = shapeNameArr[len(shapeNameArr)-2]
+		item.SubClass = shapeNameArr[len(shapeNameArr)-1]
 	}
-	// if mx is a line
+
 	if _, ok := mx.Style.attrs["endArrow"]; ok {
-
-		if mx.Source == 0 {
-			return nil, fmt.Errorf("no source in line attributes (id: %d)", mx.Id)
-		}
-
-		if mx.Target == 0 {
-			return nil, fmt.Errorf("no target in line attributes (id: %d)", mx.Id)
-		}
-
 		// i believe line has exit/entry attributes when both source and target are set
 		ExitX, _ := strconv.ParseFloat(mx.Style.attrs["exitX"], 32)
 		ExitY, _ := strconv.ParseFloat(mx.Style.attrs["exitY"], 32)
 		EntryX, _ := strconv.ParseFloat(mx.Style.attrs["entryX"], 32)
 		EntryY, _ := strconv.ParseFloat(mx.Style.attrs["entryY"], 32)
 
-		el := Line{
-			UUID:     uuid,
-			ID:       mx.Id,
-			SourceId: mx.Source,
-			TargetId: mx.Target,
-			ExitX:    float32(ExitX),
-			ExitY:    float32(ExitY),
-			EntryX:   float32(EntryX),
-			EntryY:   float32(EntryY),
-		}
-		return el, nil
+		item.SourceId = mx.Source
+		item.TargetId = mx.Target
+		item.ExitX = float32(ExitX)
+		item.ExitY = float32(ExitY)
+		item.EntryX = float32(EntryX)
+		item.EntryY = float32(EntryY)
+		item.Class = "lines"
+		item.SubClass = "line"
 	}
-	return nil, fmt.Errorf("unknown element (id: %d)", mx.Id)
+
+	return &item
+}
+
+// LoadDocument converts incomming document from xml to a slice of ItemDTO objects
+func (c *Controller) ReadInDiagram(ctx context.Context, logger *zap.Logger, xmldoc *bytes.Reader) (uuid string, _ []calculator.Item, err error) {
+
+	logger.Info("processing new document")
+	D := &Mxfile{}
+	xmlbytes, err := ioutil.ReadAll(xmldoc)
+	if err != nil {
+		logger.Error("could not read in the document",
+			zap.Error(err),
+		)
+		return uuid, nil, err
+	}
+
+	err = xml.Unmarshal(xmlbytes, D)
+	if err != nil && err.Error() != "EOF" {
+		logger.Error("can not unmarshal document",
+			zap.Error(err),
+		)
+		return uuid, nil, err
+	}
+
+	uuid = D.Diagram.Id
+	if uuid == "" {
+		return uuid, nil, fmt.Errorf("no diagram id in document")
+	}
+	var items []ItemDTO
+	for _, item := range D.Diagram.MxGraphModel.Root.MxCells {
+		items = append(items, *NewItemDTO(&item, uuid))
+	}
+
+	return uuid, ItemsAdapter(logger, items), err
+}
+
+func ItemsAdapter(logger *zap.Logger, itemsdto []ItemDTO) (citems []calculator.Item) {
+	for _, item := range itemsdto {
+		citems = append(citems, calculator.Item{
+			UUID:     item.UUID,
+			ID:       item.ID,
+			Value:    item.Value,
+			Class:    item.Class,
+			SubClass: item.SubClass,
+			SourceId: item.SourceId,
+			TargetId: item.TargetId,
+			ExitX:    item.ExitX,
+			ExitY:    item.ExitY,
+			EntryX:   item.EntryY,
+			EntryY:   item.EntryY,
+		})
+
+	}
+	return citems
+}
+
+func (c *Controller) UpdateDiagram(ctx context.Context, logger *zap.Logger, diaUUID string) error {
+
+	return nil
 }

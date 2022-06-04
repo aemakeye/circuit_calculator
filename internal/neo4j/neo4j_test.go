@@ -2,6 +2,7 @@ package neo4j
 
 import (
 	"bytes"
+	"github.com/aemakeye/circuit_calculator/internal/calculator"
 	"github.com/aemakeye/circuit_calculator/internal/config"
 	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
 	"github.com/stretchr/testify/assert"
@@ -89,4 +90,44 @@ func TestNeo4jBasic(t *testing.T) {
 		})
 	}
 
+}
+
+func TestNeo4jController_PushNode(t *testing.T) {
+	item := calculator.Item{
+		UUID:     "eopifrnv-dlfkvn-dklfv",
+		ID:       5,
+		Value:    "",
+		Class:    "resistors",
+		SubClass: "resistor_1",
+		SourceId: 0,
+		TargetId: 0,
+		ExitX:    0,
+		ExitY:    0,
+		EntryX:   0,
+		EntryY:   0,
+	}
+	var n4jconfig = []byte(`
+			{
+              "loglevel": "INFO",
+			  "neo4j":
+			  {
+				"host": "localhost",
+				"port": "7687",
+				"user": "neo4j",
+				"password": "password",
+				"schema": ""
+			  }
+			}
+			`)
+	logger := zap.NewNop()
+	n4jconfigReader := bytes.NewReader(n4jconfig)
+	cfg, err := config.NewConfig(logger, n4jconfigReader)
+	assert.NoError(t, err)
+	nj, err := NewNeo4j(logger, cfg)
+	assert.NoError(t, err)
+	t.Run("push node", func(t *testing.T) {
+		uuid, id, err := nj.PushItem(logger, item)
+		assert.NoError(t, err)
+		t.Logf("%s-%s", uuid, id)
+	})
 }
