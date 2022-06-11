@@ -95,7 +95,7 @@ func TestNeo4jBasic(t *testing.T) {
 func TestNeo4jController_PushNode(t *testing.T) {
 	item := calculator.Item{
 		UUID:     "eopifrnv-dlfkvn-dklfv",
-		ID:       5,
+		ID:       6,
 		Value:    "",
 		Class:    "resistors",
 		SubClass: "resistor_1",
@@ -130,4 +130,8 @@ func TestNeo4jController_PushNode(t *testing.T) {
 		assert.NoError(t, err)
 		t.Logf("%s-%s", uuid, id)
 	})
+}
+
+func TestNeo4jController_PushRelation(t *testing.T) {
+
 }

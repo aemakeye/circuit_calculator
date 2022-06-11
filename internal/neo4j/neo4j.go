@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 	"strings"
 	"sync"
+	"text/template"
 )
 
 type Neo4jController struct {
@@ -113,7 +114,24 @@ func (neodb *Neo4jController) PushNode(logger *zap.Logger, dto *NodeDTO) (uuid s
 
 func (neodb *Neo4jController) PushRelation(logger *zap.Logger, dto *RelationDTO) (uuid string, id string, err error) {
 	//TODO: return (specific) error if no source or target for relation/edge
-
+	//https://neo4j.com/docs/cypher-manual/current/clauses/merge/#merge-merge-on-a-relationship
+	cypherqTemplate := template.New("pushRelation")
+	cypherqTemplate, err = cypherqTemplate.Parse(`MATCH
+		(source:Element {uuid: '{{.uuid'}, id: '{{.sourceId}}')})
+		(target:Element {uuid: '{{.uuid'}, id: '{{.targetId}}')})
+		MERGE (source) - [r:connected] - (target)
+		RETURN r
+		`,
+	)
+	if err != nil {
+		logger.Error("error while creating relation between elements",
+			zap.String("uuid", dto.UUID),
+			zap.Int("source id", dto.SourceId),
+			zap.Int("target id", dto.TargetId),
+			zap.Error(err),
+		)
+		return "", "", err
+	}
 	return "", "", err
 }
 
