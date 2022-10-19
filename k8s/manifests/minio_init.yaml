@@ -1,0 +1,97 @@
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: createappuser
+  namespace: circuit-calculator
+spec:
+  template:
+    spec:
+      containers:
+        - name: createappuser
+          image: minio/mc
+          env:
+            - name: MINIO_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: miniorootuser
+                  key: user
+            - name: MINIO_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: miniorootuser
+                  key: password
+            - name: MINIO_APP_USER
+              valueFrom:
+                secretKeyRef:
+                  name: minioappuser
+                  key: user
+            - name: MINIO_APP_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: minioappuser
+                  key: password
+          command:
+            - "sh"
+            - "-xc"
+          args:
+            -  /usr/bin/mc alias set circs3 http://minio.circuit-calculator.svc.cluster.local:9000 ${MINIO_ACCESS_KEY} ${MINIO_SECRET_KEY};
+              /usr/bin/mc admin info circs3;
+              /usr/bin/mc admin user add circs3 ${MINIO_APP_USER} ${MINIO_APP_SECRET};
+              exit 0;
+          startupProbe:
+            initialDelaySeconds: 1
+            periodSeconds: 1
+            timeoutSeconds: 1
+            successThreshold: 1
+            failureThreshold: 5
+            tcpSocket:
+              host: minio
+              port: 9000
+      restartPolicy: OnFailure
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: createappbucket
+  namespace: circuit-calculator
+spec:
+  template:
+    spec:
+      containers:
+        - name: createappbucket
+          image: minio/mc
+          env:
+            - name: MINIO_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: miniorootuser
+                  key: user
+            - name: MINIO_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: miniorootuser
+                  key: password
+            - name: MINIO_BUCKET
+              valueFrom:
+                configMapKeyRef:
+                  key: bucket-name
+                  name: minio-config
+          command:
+            - "sh"
+            - "-xc"
+          args:
+            -  /usr/bin/mc alias set circs3 http://minio.circuit-calculator.svc.cluster.local:9000 ${MINIO_ACCESS_KEY} ${MINIO_SECRET_KEY};
+              /usr/bin/mc admin info circs3;
+              /usr/bin/mc mb --ignore-existing --with-versioning circs3/calculator;
+              exit 0;
+          startupProbe:
+            initialDelaySeconds: 1
+            periodSeconds: 1
+            timeoutSeconds: 1
+            successThreshold: 1
+            failureThreshold: 5
+            tcpSocket:
+              host: minio
+              port: 9000
+      restartPolicy: OnFailure
