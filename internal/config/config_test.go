@@ -8,13 +8,8 @@ import (
 	"testing"
 )
 
-func TestEnvOverride(t *testing.T) {
-	t.Run("check env + CConfig file", func(t *testing.T) {
-
-		env := map[string]string{
-			"CALC_LOGLEVEL": "DEBUG",
-		}
-		var input = []byte(`
+func TestConfig(t *testing.T) {
+	var input = []byte(`
 			{
               "Loglevel": "INFO",
 			  "Neo4j":
@@ -28,14 +23,19 @@ func TestEnvOverride(t *testing.T) {
 			  },
 			  "Minio":
 			  {  	
-				"host": "localhost",
-				"port": "1234",
+				"host": "localhost:1234",	
 				"User": "Minio",
 				"Password": "Password",
 				"schema": ""
 			  }
 			}
 			`)
+	t.Run("check env + CConfig file", func(t *testing.T) {
+
+		env := map[string]string{
+			"CALC_LOGLEVEL": "DEBUG",
+		}
+
 		logger := zap.NewNop()
 		for k, v := range env {
 			_ = os.Setenv(k, v)
@@ -47,4 +47,10 @@ func TestEnvOverride(t *testing.T) {
 		assert.Equal(t, "yes", "yes")
 	})
 
+	t.Run("test minio configuration options", func(t *testing.T) {
+		logger := zap.NewNop()
+		cstring := bytes.NewReader(input)
+		cfg, _ := NewConfig(logger, cstring)
+		assert.Equal(t, cfg.Minio.EndpointURL().String(), "http://localhost:1234")
+	})
 }

@@ -1,11 +1,18 @@
 package calculator
 
 type Diagram struct {
-	UUID    string
-	Body    string
-	IsValid bool
-	Error   string
-	Items   []Item
+	UUID     string
+	Body     string
+	IsValid  bool
+	Error    string
+	Items    []Item
+	Name     string
+	Versions []DiagramVersion
+}
+
+type DiagramVersion struct {
+	Version  string
+	metadata string
 }
 
 type Item struct {

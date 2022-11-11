@@ -9,23 +9,23 @@ import (
 )
 
 type calculator struct {
-	logger   *zap.Logger
-	config   *config.CConfig
-	gstorage GraphStorage
-	ostorage ObjectStorage
+	logger      *zap.Logger
+	config      *config.CConfig
+	gstorage    GraphStorage
+	textStorage TextStorage
 }
 
 var instance *calculator
 var once sync.Once
 
-func NewCalculator(logger *zap.Logger, config *config.CConfig, gs GraphStorage, os ObjectStorage) (*calculator, error) {
+func NewCalculator(logger *zap.Logger, config *config.CConfig, gs GraphStorage, os TextStorage) (*calculator, error) {
 	once.Do(func() {
 		logger.Info("creating calculator instance")
 		instance = &calculator{
-			logger:   logger,
-			config:   config,
-			gstorage: gs,
-			ostorage: os,
+			logger:      logger,
+			config:      config,
+			gstorage:    gs,
+			textStorage: os,
 		}
 	})
 
@@ -41,7 +41,11 @@ type GraphStorage interface {
 	PushItem(logger *zap.Logger, item Item) (uuid string, id string, err error)
 }
 
-type ObjectStorage interface {
-	SaveDiagram(ctx context.Context, logger *zap.Logger, doc *[]byte) error
-	LoadDiagramByUUID(ctx context.Context, logger *zap.Logger, uuid string) ([]byte, error)
+type TextStorage interface {
+	UploadDiagram(ctx context.Context, logger *zap.Logger, dia *Diagram) error
+	LoadDiagramByUUID(ctx context.Context, logger *zap.Logger, uuid string, version string) ([]byte, error)
+	LoadDiagramByName(ctx context.Context, logger *zap.Logger, name string, version string) ([]byte, error)
+	IsVersioned(ctx context.Context) bool
+	Ls(ctx context.Context) ([]string, error)
+	LsVersions(ctx context.Context, diagram *Diagram) ([]DiagramVersion, error)
 }

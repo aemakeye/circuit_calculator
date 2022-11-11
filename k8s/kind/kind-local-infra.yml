@@ -21,3 +21,9 @@ nodes:
   - containerPort: 7687
     hostPort: 7687
     protocol: TCP
+  - containerPort: 9000
+    hostPort: 9000
+    protocol: TCP
+  - containerPort: 9001
+    hostPort: 9001
+    protocol: TCP

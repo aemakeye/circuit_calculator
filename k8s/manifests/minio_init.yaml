@@ -38,6 +38,7 @@ spec:
             -  /usr/bin/mc alias set circs3 http://minio.circuit-calculator.svc.cluster.local:9000 ${MINIO_ACCESS_KEY} ${MINIO_SECRET_KEY};
               /usr/bin/mc admin info circs3;
               /usr/bin/mc admin user add circs3 ${MINIO_APP_USER} ${MINIO_APP_SECRET};
+              /usr/bin/mc admin policy set circs3 readwrite user=${MINIO_APP_USER};
               exit 0;
           startupProbe:
             initialDelaySeconds: 1
@@ -81,9 +82,10 @@ spec:
             - "sh"
             - "-xc"
           args:
-            -  /usr/bin/mc alias set circs3 http://minio.circuit-calculator.svc.cluster.local:9000 ${MINIO_ACCESS_KEY} ${MINIO_SECRET_KEY};
+            - /usr/bin/mc alias set circs3 http://minio.circuit-calculator.svc.cluster.local:9000 ${MINIO_ACCESS_KEY} ${MINIO_SECRET_KEY};
               /usr/bin/mc admin info circs3;
-              /usr/bin/mc mb --ignore-existing --with-versioning circs3/calculator;
+              /usr/bin/mc mb --ignore-existing --with-versioning --region us-east-1 circs3/calculator;
+              /usr/bin/mc stat circs3/calculator;
               exit 0;
           startupProbe:
             initialDelaySeconds: 1

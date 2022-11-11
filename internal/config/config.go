@@ -3,6 +3,8 @@ package config
 import (
 	"bytes"
 	"fmt"
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
@@ -12,7 +14,7 @@ type CConfig struct {
 	Logger   *zap.Logger
 	Loglevel string
 	Neo4j    *neo4j
-	Minio    *minio
+	Minio    *minio.Client
 	Filename string
 }
 
@@ -23,13 +25,6 @@ type neo4j struct {
 	Endpoint string
 	//play with this and Neo4j structure
 	//Timeout  time.Duration
-}
-
-// minio internal structure
-type minio struct {
-	user     string
-	password string
-	endpoint string
 }
 
 // Neo4j structure to unmarshal CConfig file
@@ -68,7 +63,7 @@ func NewConfig(logger *zap.Logger, reader *bytes.Reader) (cfg *CConfig, err erro
 		Logger:   nil,
 		Loglevel: "",
 		Neo4j:    &neo4j{},
-		Minio:    &minio{},
+		Minio:    &minio.Client{},
 		Filename: "",
 	}
 
@@ -111,10 +106,15 @@ func NewConfig(logger *zap.Logger, reader *bytes.Reader) (cfg *CConfig, err erro
 		Endpoint: fc.Neo4j.Host + ":" + fc.Neo4j.Port,
 	}
 
-	cfg.Minio = &minio{
-		user:     fc.Minio.User,
-		password: fc.Minio.Password,
-		endpoint: fc.Minio.Host + ":" + fc.Minio.Port,
+	cfg.Minio, err = minio.New(
+		fc.Minio.Host,
+		&minio.Options{
+			Creds:  credentials.NewStaticV4(fc.Minio.User, fc.Minio.Password, ""),
+			Secure: false,
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("minio client failed: %s", err)
 	}
 
 	return cfg, nil
