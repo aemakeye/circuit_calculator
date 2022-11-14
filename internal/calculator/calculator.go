@@ -43,9 +43,8 @@ type GraphStorage interface {
 
 type TextStorage interface {
 	UploadDiagram(ctx context.Context, logger *zap.Logger, dia *Diagram) error
-	LoadDiagramByUUID(ctx context.Context, logger *zap.Logger, uuid string, version string) ([]byte, error)
 	LoadDiagramByName(ctx context.Context, logger *zap.Logger, name string, version string) ([]byte, error)
 	IsVersioned(ctx context.Context) bool
-	Ls(ctx context.Context) ([]string, error)
-	LsVersions(ctx context.Context, diagram *Diagram) ([]DiagramVersion, error)
+	Ls(ctx context.Context) <-chan Diagram
+	LsVersions(ctx context.Context, diagram *Diagram) <-chan DiagramVersion
 }

@@ -3,7 +3,6 @@ package calculator
 type Diagram struct {
 	UUID     string
 	Body     string
-	IsValid  bool
 	Error    string
 	Items    []Item
 	Name     string
@@ -12,7 +11,7 @@ type Diagram struct {
 
 type DiagramVersion struct {
 	Version  string
-	metadata string
+	Metadata string
 }
 
 type Item struct {

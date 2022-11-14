@@ -2,13 +2,14 @@ package minio
 
 import (
 	"context"
-	"fmt"
 	"github.com/aemakeye/circuit_calculator/internal/calculator"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"go.uber.org/zap"
+	"io/ioutil"
 	"strings"
 	"sync"
+	"time"
 )
 
 var once sync.Once
@@ -21,10 +22,10 @@ type minioStorage struct {
 	ssl      bool
 	Client   *minio.Client
 	Logger   *zap.Logger
-	bucket   *minio.BucketInfo
+	Bucket   *minio.BucketInfo
 }
 
-func NewMinioStorage(logger *zap.Logger, url string, user string, password string, ssl bool) (instance *minioStorage, err error) {
+func NewMinioStorage(logger *zap.Logger, url string, bucket string, user string, password string, ssl bool) (instance *minioStorage, err error) {
 	once.Do(func() {
 		logger.Info("Creating calculator instance")
 		instance = &minioStorage{
@@ -34,6 +35,7 @@ func NewMinioStorage(logger *zap.Logger, url string, user string, password strin
 			ssl:      ssl,
 			Client:   nil,
 			Logger:   logger,
+			Bucket:   nil,
 		}
 		instance.Client, err = minio.New(instance.url, &minio.Options{
 			Creds:  credentials.NewStaticV4(instance.user, instance.password, ""),
@@ -48,6 +50,22 @@ func NewMinioStorage(logger *zap.Logger, url string, user string, password strin
 		} else {
 			instance.Logger.Info("minio backend connected successfully")
 		}
+		found, err := instance.Client.BucketExists(context.Background(), bucket)
+		if err != nil {
+			logger.Fatal("could not find a bucket",
+				zap.Error(err),
+			)
+		}
+		if found {
+			instance.Bucket = &minio.BucketInfo{
+				Name:         bucket,
+				CreationDate: time.Time{},
+			}
+		} else {
+			logger.Fatal("bucket not found or permissions issue ",
+				zap.String("bucket name", bucket),
+			)
+		}
 	})
 	return
 }
@@ -55,13 +73,13 @@ func NewMinioStorage(logger *zap.Logger, url string, user string, password strin
 func (m minioStorage) UploadDiagram(ctx context.Context, logger *zap.Logger, dia *calculator.Diagram) (err error) {
 	//TODO: check if already exists and raise alert
 	logger.Info("Diagram upload started",
-		zap.String("bucket", m.bucket.Name),
+		zap.String("bucket", m.Bucket.Name),
 		zap.String("name", dia.Name),
 	)
 
 	info, err := m.Client.PutObject(
 		ctx,
-		m.bucket.Name,
+		m.Bucket.Name,
 		"test-diagram.xml",
 		strings.NewReader(dia.Body),
 		int64(len(dia.Body)),
@@ -69,7 +87,7 @@ func (m minioStorage) UploadDiagram(ctx context.Context, logger *zap.Logger, dia
 	)
 	if err != nil {
 		logger.Error("Failed to upload diagram",
-			zap.String("bucket", m.bucket.Name),
+			zap.String("bucket", m.Bucket.Name),
 			zap.String("name", dia.Name),
 			zap.Error(err),
 		)
@@ -84,28 +102,54 @@ func (m minioStorage) UploadDiagram(ctx context.Context, logger *zap.Logger, dia
 	return nil
 }
 
-func (m minioStorage) LoadDiagramByUUID(ctx context.Context, logger *zap.Logger, uuid string, version string) ([]byte, error) {
-	logger.Error("Load by UUID (ETAG) is not supported in minio")
-	return nil, fmt.Errorf("method not supported by minio storage")
-}
-
+// LoadDiagramByName loads latest version of file from minio in case version is empty string,
+// in case version is not empty - tries loading provided version
 func (m minioStorage) LoadDiagramByName(ctx context.Context, logger *zap.Logger, name string, version string) ([]byte, error) {
-	if version == "" {
-		logger.Info("Loading diagram",
-			zap.String("name", name),
-		)
-	} else {
+	objReader, err := m.Client.GetObject(
+		ctx,
+		m.Bucket.Name,
+		name,
+		minio.GetObjectOptions{
+			ServerSideEncryption: nil,
+			VersionID:            version,
+			PartNumber:           0,
+			Checksum:             false,
+			Internal:             minio.AdvancedGetOptions{},
+		},
+	)
 
+	if err != nil {
+		logger.Error("Could not load diagram",
+			zap.String("name", name),
+			zap.String("version", version),
+			zap.Error(err),
+		)
+		return nil, err
 	}
-	return nil, nil
+
+	defer objReader.Close()
+
+	buf, err := ioutil.ReadAll(objReader)
+
+	if err != nil {
+		logger.Error("could not read file",
+			zap.String("name", name),
+			zap.Error(err),
+		)
+		return nil, err
+	}
+
+	return buf, nil
 }
 
 func (m minioStorage) IsVersioned(ctx context.Context) bool {
 	return true
 }
 
-func (m minioStorage) Ls(ctx context.Context) ([]string, error) {
-	m.Client.ListObjects(ctx, m.bucket.Name, minio.ListObjectsOptions{
+// Ls performes list of files actually,  calculator.Diagram has only the name attribute set.
+func (m minioStorage) Ls(ctx context.Context) <-chan calculator.Diagram {
+	rChan := make(chan calculator.Diagram)
+	chanObjInfo := m.Client.ListObjects(ctx, m.Bucket.Name, minio.ListObjectsOptions{
 		WithVersions: false,
 		WithMetadata: false,
 		Prefix:       "",
@@ -114,11 +158,26 @@ func (m minioStorage) Ls(ctx context.Context) ([]string, error) {
 		StartAfter:   "",
 		UseV1:        false,
 	})
-	return nil, nil
+
+	go func() {
+		for obj := range chanObjInfo {
+			if obj.Err != nil {
+				m.Logger.Error("skipping bad object")
+			}
+			m.Logger.Debug("New item in list",
+				zap.String("diagram name", obj.Key),
+			)
+			rChan <- calculator.Diagram{Name: obj.Key}
+		}
+		close(rChan)
+	}()
+	return rChan
 }
 
-func (m minioStorage) LsVersions(ctx context.Context, diagram *calculator.Diagram) ([]calculator.DiagramVersion, error) {
-	m.Client.ListObjects(ctx, m.bucket.Name, minio.ListObjectsOptions{
+//LsVersions shows varsions of provided object, stored in minio object storage.
+func (m minioStorage) LsVersions(ctx context.Context, diagram *calculator.Diagram) <-chan calculator.DiagramVersion {
+	rChan := make(chan calculator.DiagramVersion)
+	chanObjInfo := m.Client.ListObjects(ctx, m.Bucket.Name, minio.ListObjectsOptions{
 		WithVersions: true,
 		WithMetadata: false,
 		Prefix:       diagram.Name,
@@ -127,5 +186,20 @@ func (m minioStorage) LsVersions(ctx context.Context, diagram *calculator.Diagra
 		StartAfter:   "",
 		UseV1:        false,
 	})
-	return nil, nil
+
+	go func() {
+		for obj := range chanObjInfo {
+			if obj.Err != nil {
+				m.Logger.Error("skipping bad object")
+			}
+			m.Logger.Debug("diagram version found",
+				zap.String("diagram name", diagram.Name),
+				zap.String("version", obj.VersionID),
+			)
+			rChan <- calculator.DiagramVersion{Version: obj.VersionID}
+		}
+		close(rChan)
+	}()
+
+	return rChan
 }
