@@ -1,5 +1,7 @@
 kind-fromscratch:
-	kind create cluster --config k8s/kind/kind-local-infra.yml && \
+	kind create cluster --config k8s/kind/kind-local-infra.yml
+
+kind-ns:
 	kubectl apply -f k8s/manifests/namespace.yaml --wait;
 
 kindup: kind-ingress
@@ -32,6 +34,11 @@ kind-drawio:
 kind-drawio-rm:
 	kubectl delete -f k8s/manifests/drawio.yaml
 
+kind-gitlab-rm:
+	kubectl delete -f k8s/manifests/gitlab.yaml
+
+
 kind-rm:
 	kind delete cluster
 
+#2b12c3d34f8afaee3a9b1fed3e697effcc3d56f52c18a5e620ea79922c8df552

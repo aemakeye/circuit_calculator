@@ -1,13 +1,14 @@
 package minio
 
 import (
+	"bytes"
 	"context"
 	"github.com/aemakeye/circuit_calculator/internal/calculator"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"go.uber.org/zap"
+	"io"
 	"io/ioutil"
-	"strings"
 	"sync"
 	"time"
 )
@@ -70,30 +71,40 @@ func NewMinioStorage(logger *zap.Logger, url string, bucket string, user string,
 	return
 }
 
-func (m minioStorage) UploadDiagram(ctx context.Context, logger *zap.Logger, dia *calculator.Diagram) (err error) {
+func (m minioStorage) UploadTextFile(ctx context.Context, logger *zap.Logger, r io.Reader, path string) (err error) {
 	//TODO: check if already exists and raise alert
 	logger.Info("Diagram upload started",
 		zap.String("bucket", m.Bucket.Name),
-		zap.String("name", dia.Name),
+		zap.String("name", path),
 	)
+
+	body, err := ioutil.ReadAll(r)
+	if err != nil {
+		logger.Error("filed to read from reader",
+			zap.Error(err),
+		)
+		return err
+	}
+
+	rn := bytes.NewReader(body)
 
 	info, err := m.Client.PutObject(
 		ctx,
 		m.Bucket.Name,
-		"test-diagram.xml",
-		strings.NewReader(dia.Body),
-		int64(len(dia.Body)),
+		path,
+		rn,
+		int64(len(body)),
 		minio.PutObjectOptions{ContentType: "application/octet-stream"},
 	)
 	if err != nil {
-		logger.Error("Failed to upload diagram",
+		logger.Error("Failed to upload file",
 			zap.String("bucket", m.Bucket.Name),
-			zap.String("name", dia.Name),
+			zap.String("path", path),
 			zap.Error(err),
 		)
 		return err
 	} else {
-		logger.Info("Diagram uploaded",
+		logger.Info("file uploaded",
 			zap.String("bucket", info.Bucket),
 			zap.String("key", info.Key),
 			zap.String("VersionID", info.VersionID),

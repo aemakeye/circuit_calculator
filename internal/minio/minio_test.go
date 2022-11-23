@@ -79,16 +79,11 @@ func TestNewMinioStorage(t *testing.T) {
 
 	t.Run("test minio upload", func(t *testing.T) {
 
-		info, err := m.Client.PutObject(
-			context.Background(),
-			bucket,
-			"test-diagram.xml",
-			bytes.NewReader(diagram),
-			int64(len(diagram)),
-			minio.PutObjectOptions{ContentType: "application/octet-stream"},
-		)
-		t.Logf("VersionID: %s", info.VersionID)
-		t.Logf("ETAG: %s", info.ETag)
+		err := m.UploadTextFile(context.Background(), zap.NewNop(), bytes.NewReader(diagram), "test/diagram.xml")
+
+		assert.NoError(t, err)
+		//t.Logf("VersionID: %s", info.VersionID)
+		//t.Logf("ETAG: %s", info.ETag)
 		info2, err := m.Client.ListBuckets(context.Background())
 
 		assert.NoError(t, err)
