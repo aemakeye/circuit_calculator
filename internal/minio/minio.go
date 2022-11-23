@@ -3,7 +3,6 @@ package minio
 import (
 	"bytes"
 	"context"
-	"github.com/aemakeye/circuit_calculator/internal/calculator"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"go.uber.org/zap"
@@ -115,11 +114,11 @@ func (m minioStorage) UploadTextFile(ctx context.Context, logger *zap.Logger, r 
 
 // LoadDiagramByName loads latest version of file from minio in case version is empty string,
 // in case version is not empty - tries loading provided version
-func (m minioStorage) LoadDiagramByName(ctx context.Context, logger *zap.Logger, name string, version string) ([]byte, error) {
+func (m minioStorage) LoadFileByName(ctx context.Context, logger *zap.Logger, path string, version string) (io.Reader, error) {
 	objReader, err := m.Client.GetObject(
 		ctx,
 		m.Bucket.Name,
-		name,
+		path,
 		minio.GetObjectOptions{
 			ServerSideEncryption: nil,
 			VersionID:            version,
@@ -131,26 +130,13 @@ func (m minioStorage) LoadDiagramByName(ctx context.Context, logger *zap.Logger,
 
 	if err != nil {
 		logger.Error("Could not load diagram",
-			zap.String("name", name),
+			zap.String("name", path),
 			zap.String("version", version),
 			zap.Error(err),
 		)
 		return nil, err
 	}
-
-	defer objReader.Close()
-
-	buf, err := ioutil.ReadAll(objReader)
-
-	if err != nil {
-		logger.Error("could not read file",
-			zap.String("name", name),
-			zap.Error(err),
-		)
-		return nil, err
-	}
-
-	return buf, nil
+	return objReader, nil
 }
 
 func (m minioStorage) IsVersioned(ctx context.Context) bool {
@@ -158,8 +144,8 @@ func (m minioStorage) IsVersioned(ctx context.Context) bool {
 }
 
 // Ls performes list of files actually,  calculator.Diagram has only the name attribute set.
-func (m minioStorage) Ls(ctx context.Context) <-chan calculator.Diagram {
-	rChan := make(chan calculator.Diagram)
+func (m minioStorage) Ls(ctx context.Context, path string) <-chan string {
+	rChan := make(chan string)
 	chanObjInfo := m.Client.ListObjects(ctx, m.Bucket.Name, minio.ListObjectsOptions{
 		WithVersions: false,
 		WithMetadata: false,
@@ -178,7 +164,7 @@ func (m minioStorage) Ls(ctx context.Context) <-chan calculator.Diagram {
 			m.Logger.Debug("New item in list",
 				zap.String("diagram name", obj.Key),
 			)
-			rChan <- calculator.Diagram{Name: obj.Key}
+			rChan <- obj.Key
 		}
 		close(rChan)
 	}()
@@ -186,12 +172,12 @@ func (m minioStorage) Ls(ctx context.Context) <-chan calculator.Diagram {
 }
 
 //LsVersions shows varsions of provided object, stored in minio object storage.
-func (m minioStorage) LsVersions(ctx context.Context, diagram *calculator.Diagram) <-chan calculator.DiagramVersion {
-	rChan := make(chan calculator.DiagramVersion)
+func (m minioStorage) LsVersions(ctx context.Context, path string) <-chan string {
+	rChan := make(chan string)
 	chanObjInfo := m.Client.ListObjects(ctx, m.Bucket.Name, minio.ListObjectsOptions{
 		WithVersions: true,
 		WithMetadata: false,
-		Prefix:       diagram.Name,
+		Prefix:       path,
 		Recursive:    false,
 		MaxKeys:      0,
 		StartAfter:   "",
@@ -204,10 +190,10 @@ func (m minioStorage) LsVersions(ctx context.Context, diagram *calculator.Diagra
 				m.Logger.Error("skipping bad object")
 			}
 			m.Logger.Debug("diagram version found",
-				zap.String("diagram name", diagram.Name),
+				zap.String("diagram name", path),
 				zap.String("version", obj.VersionID),
 			)
-			rChan <- calculator.DiagramVersion{Version: obj.VersionID}
+			rChan <- obj.VersionID
 		}
 		close(rChan)
 	}()

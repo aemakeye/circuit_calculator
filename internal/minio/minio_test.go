@@ -5,7 +5,6 @@ package minio
 import (
 	"bytes"
 	"context"
-	"github.com/aemakeye/circuit_calculator/internal/calculator"
 	"github.com/minio/minio-go/v7"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
@@ -119,7 +118,7 @@ func TestNewMinioStorage(t *testing.T) {
 			info, err := m.Client.PutObject(
 				context.Background(),
 				bucket,
-				"test-diagram"+strconv.Itoa(i)+".xml",
+				"test/test-diagram"+strconv.Itoa(i)+".xml",
 				bytes.NewReader(diagram),
 				int64(len(diagram)),
 				minio.PutObjectOptions{ContentType: "application/octet-stream"},
@@ -130,48 +129,38 @@ func TestNewMinioStorage(t *testing.T) {
 			t.Logf("ETAG: %s", info.ETag)
 		}
 
-		infoChan := m.Ls(context.Background())
+		infoChan := m.Ls(context.Background(), "test/")
 
-		for obj := range infoChan {
-			assert.NotEmpty(t, obj)
-			t.Logf("obj info: %s", obj.Name)
+		for obj_name := range infoChan {
+			assert.NotEmpty(t, obj_name)
+			t.Logf("obj info: %s", obj_name)
 		}
 
 	})
 
 	t.Run("load version", func(t *testing.T) {
-		infoChan := m.LsVersions(context.Background(), &calculator.Diagram{
-			UUID:     "",
-			Body:     "",
-			Error:    "",
-			Items:    nil,
-			Name:     "test-diagram0.xml",
-			Versions: nil,
-		})
+		infoChan := m.LsVersions(context.Background(), "test-diagram0.xml")
 
-		for obj := range infoChan {
-			t.Logf("test_diagram0.xml version found: %s", obj.Version)
+		for obj_v := range infoChan {
+			t.Logf("test_diagram0.xml version found: %s", obj_v)
 
 		}
 
 	})
-	t.Run("try get object, version latest, OK", func(t *testing.T) {
-		obj, err := m.LoadDiagramByName(
+	t.Run("try get text object, version latest, OK", func(t *testing.T) {
+		obj, err := m.LoadFileByName(
 			context.Background(),
 			zap.NewNop(),
-			"test-diagram.xml",
+			"test/test-diagram0.xml",
 			"",
 		)
 		assert.NoError(t, err)
-		objReader := bytes.NewReader(obj)
+		obj_body, err := ioutil.ReadAll(obj)
 
-		buf, err := ioutil.ReadAll(objReader)
-		assert.NoError(t, err)
-
-		t.Logf("%s", buf)
+		t.Logf("%s", obj_body)
 	})
 	t.Run("try get object, version latest, FAIL", func(t *testing.T) {
-		_, err := m.LoadDiagramByName(
+		_, err := m.LoadFileByName(
 			context.Background(),
 			zap.NewNop(),
 			"test-diagram-FAIL.xml",

@@ -44,8 +44,8 @@ type GraphStorage interface {
 
 type ObjectStorage interface {
 	UploadTextFile(ctx context.Context, logger *zap.Logger, r io.Reader, path string) error
-	LoadDiagramByName(ctx context.Context, logger *zap.Logger, name string, version string) ([]byte, error)
+	LoadFileByName(ctx context.Context, logger *zap.Logger, path string, version string) (io.Reader, error)
 	IsVersioned(ctx context.Context) bool
-	Ls(ctx context.Context) <-chan Diagram
-	LsVersions(ctx context.Context, diagram *Diagram) <-chan DiagramVersion
+	Ls(ctx context.Context, path string) <-chan string
+	LsVersions(ctx context.Context, path string) <-chan string
 }
