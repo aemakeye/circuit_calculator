@@ -115,6 +115,14 @@ func (m minioStorage) UploadTextFile(ctx context.Context, logger *zap.Logger, r 
 // LoadDiagramByName loads latest version of file from minio in case version is empty string,
 // in case version is not empty - tries loading provided version
 func (m minioStorage) LoadFileByName(ctx context.Context, logger *zap.Logger, path string, version string) (io.Reader, error) {
+	_, err := m.Client.StatObject(ctx, m.Bucket.Name, path, minio.StatObjectOptions{})
+	if err != nil {
+		logger.Error("could not load file",
+			zap.String("path", path),
+			zap.Error(err),
+		)
+		return nil, err
+	}
 	objReader, err := m.Client.GetObject(
 		ctx,
 		m.Bucket.Name,
@@ -129,13 +137,15 @@ func (m minioStorage) LoadFileByName(ctx context.Context, logger *zap.Logger, pa
 	)
 
 	if err != nil {
-		logger.Error("Could not load diagram",
-			zap.String("name", path),
+		logger.Error("Could not load file",
+			zap.String("bucket", m.Bucket.Name),
+			zap.String("path", path),
 			zap.String("version", version),
 			zap.Error(err),
 		)
 		return nil, err
 	}
+
 	return objReader, nil
 }
 
@@ -171,8 +181,17 @@ func (m minioStorage) Ls(ctx context.Context, path string) <-chan string {
 	return rChan
 }
 
-//LsVersions shows varsions of provided object, stored in minio object storage.
-func (m minioStorage) LsVersions(ctx context.Context, path string) <-chan string {
+// LsVersions shows varsions of provided object, stored in minio object storage.
+func (m minioStorage) LsVersions(ctx context.Context, path string, logger *zap.Logger) (<-chan string, error) {
+	_, err := m.Client.StatObject(ctx, m.Bucket.Name, path, minio.StatObjectOptions{})
+	if err != nil {
+		logger.Error("could not load file",
+			zap.String("path", path),
+			zap.Error(err),
+		)
+		return nil, err
+	}
+
 	rChan := make(chan string)
 	chanObjInfo := m.Client.ListObjects(ctx, m.Bucket.Name, minio.ListObjectsOptions{
 		WithVersions: true,
@@ -198,5 +217,5 @@ func (m minioStorage) LsVersions(ctx context.Context, path string) <-chan string
 		close(rChan)
 	}()
 
-	return rChan
+	return rChan, nil
 }

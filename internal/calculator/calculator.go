@@ -47,5 +47,5 @@ type ObjectStorage interface {
 	LoadFileByName(ctx context.Context, logger *zap.Logger, path string, version string) (io.Reader, error)
 	IsVersioned(ctx context.Context) bool
 	Ls(ctx context.Context, path string) <-chan string
-	LsVersions(ctx context.Context, path string) <-chan string
+	LsVersions(ctx context.Context, path string, logger *zap.Logger) (<-chan string, error)
 }

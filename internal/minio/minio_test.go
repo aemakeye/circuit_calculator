@@ -8,6 +8,7 @@ import (
 	"github.com/minio/minio-go/v7"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
+	"io"
 	"io/ioutil"
 	"strconv"
 	"testing"
@@ -106,7 +107,7 @@ func TestNewMinioStorage(t *testing.T) {
 		assert.NoError(t, err)
 		defer objReader.Close()
 
-		buf, err := ioutil.ReadAll(objReader)
+		buf, err := io.ReadAll(objReader)
 		assert.NoError(t, err)
 
 		t.Logf("%s", buf)
@@ -139,11 +140,11 @@ func TestNewMinioStorage(t *testing.T) {
 	})
 
 	t.Run("load version", func(t *testing.T) {
-		infoChan := m.LsVersions(context.Background(), "test-diagram0.xml")
-
+		path := "test/test-diagram0.xml"
+		infoChan, err := m.LsVersions(context.Background(), path, nil)
+		assert.NoError(t, err)
 		for obj_v := range infoChan {
-			t.Logf("test_diagram0.xml version found: %s", obj_v)
-
+			t.Logf("%s version found: %s", path, obj_v)
 		}
 
 	})
