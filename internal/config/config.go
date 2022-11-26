@@ -7,10 +7,16 @@ import (
 	"github.com/aemakeye/circuit_calculator/internal/storage"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
+	"net/netip"
+)
+
+const (
+	defaultApiListen = "127.0.0.1:8099"
 )
 
 // CConfig internal structure
 type CConfig struct {
+	Listen   netip.AddrPort
 	Logger   *zap.Logger
 	Loglevel string
 	Neo4j    *neo4j
@@ -41,17 +47,18 @@ type Neo4j struct {
 
 // Minio structure to unmarshal CConfig file
 type Minio struct {
-	User     string `json:"user"`
-	Password string `json:"password"`
-	Host     string `json:"host"`
-	Secure   bool   `json:"secure"`
-	Bucket   string `json:"bucket"`
+	User     string `yaml:"User" json:"user"`
+	Password string `yaml:"Password" json:"password"`
+	Host     string `yaml:"Host" json:"host"`
+	Secure   bool   `yaml:"Secure" json:"secure"`
+	Bucket   string `yaml:"Bucket" json:"bucket"`
 }
 
 // FileConfig structure to unmarshal CConfig from file
 type FileConfig struct {
 	Loglevel      string //`mapstructure:"CALC_LOGLEVEL" json:"Loglevel" yaml:"Loglevel"`
-	Neo4j         Neo4j
+	Listen        string `yaml:"listen" json:"Listen"`
+	Neo4j         Neo4j  `yaml:"neo4j" json:"Neo4J"`
 	ObjectStorage struct {
 		Minio *Minio `json:"minio,omitempty"`
 		//	maybe another type of storage here
@@ -102,6 +109,13 @@ func NewConfig(logger *zap.Logger, reader *bytes.Reader) (cfg *CConfig, err erro
 	}
 
 	cfg.Loglevel = fc.Loglevel
+
+	cfg.Listen, err = netip.ParseAddrPort(fc.Listen)
+
+	if err != nil {
+		logger.Error("bad listen field in config. ip:port expected. Setting default.")
+		cfg.Listen, _ = netip.ParseAddrPort(defaultApiListen)
+	}
 
 	cfg.Neo4j = &neo4j{
 		User:     fc.Neo4j.User,

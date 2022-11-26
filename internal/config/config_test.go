@@ -13,6 +13,7 @@ func TestConfig(t *testing.T) {
 	var input = []byte(`
 			{
               "Loglevel": "INFO",
+              "Listen": "0.0.0.0:8099",
 			  "Neo4j":
 			  {
 				"host": "localhost",
@@ -53,6 +54,7 @@ func TestConfig(t *testing.T) {
 	})
 
 	t.Run("test minio configuration options", func(t *testing.T) {
+		//TODO: stupid
 		tctx := context.Background()
 		logger := zap.NewNop()
 		cstring := bytes.NewReader(input)
@@ -61,5 +63,12 @@ func TestConfig(t *testing.T) {
 		_ = cfg_map
 		//t.Logf("map %s", cfg_map)
 		//assert.Equal(t, "localhost:1234", cfg_map["url"])
+	})
+	t.Run("learn netip.Addr", func(t *testing.T) {
+		logger := zap.NewNop()
+		cstring := bytes.NewReader(input)
+		cfg, _ := NewConfig(logger, cstring)
+
+		t.Logf("netip.Addr string: %s", cfg.Listen.Addr().String())
 	})
 }

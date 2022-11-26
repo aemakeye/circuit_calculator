@@ -4,7 +4,7 @@ kind-fromscratch:
 kind-ns:
 	kubectl apply -f k8s/manifests/namespace.yaml --wait;
 
-kindup: kind-ingress
+kindup: kind-ingress kind-ns
 kinddown: kind-minio-rm kind-rm-ingress
 
 kind-ingress:
@@ -36,5 +36,3 @@ kind-drawio-rm:
 
 kind-rm:
 	kind delete cluster
-
-#2b12c3d34f8afaee3a9b1fed3e697effcc3d56f52c18a5e620ea79922c8df552

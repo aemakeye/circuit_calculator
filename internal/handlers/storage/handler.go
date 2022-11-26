@@ -1,7 +1,7 @@
 package storage
 
 import (
-	"github.com/aemakeye/circuit_calculator/internal/calculator"
+	"github.com/aemakeye/circuit_calculator/internal/storage"
 	"github.com/go-chi/chi"
 	"go.uber.org/zap"
 	"net/http"
@@ -14,7 +14,7 @@ const (
 
 type Handler struct {
 	Logger  *zap.Logger
-	Storage *calculator.ObjectStorage
+	Storage storage.ObjectStorage
 }
 
 func (h *Handler) Register(r chi.Router) {
