@@ -34,10 +34,6 @@ kind-drawio:
 kind-drawio-rm:
 	kubectl delete -f k8s/manifests/drawio.yaml
 
-kind-gitlab-rm:
-	kubectl delete -f k8s/manifests/gitlab.yaml
-
-
 kind-rm:
 	kind delete cluster
 
