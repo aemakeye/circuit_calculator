@@ -5,9 +5,10 @@ neo4j:
   user: neo4j
   password: password
 
-minio:
-  host: minio-console.local.net:1234
-  user: minio
-  password: password
-  secure: false
-  bucket: calculator
+objectStorage:
+  minio:
+    host: "localhost:9000"
+    user: calculator
+    password: c@1cu1@t0r
+    secure: false
+    bucket: calculator

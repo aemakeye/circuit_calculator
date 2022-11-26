@@ -22,5 +22,7 @@ func main() {
 
 	logger.Info("Starting Circuit Calculator")
 
-	_, err = config.NewConfig(logger, nil)
+	cfg, err := config.NewConfig(logger, nil)
+
+	_ = cfg
 }

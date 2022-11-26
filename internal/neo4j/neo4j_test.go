@@ -2,8 +2,8 @@ package neo4j
 
 import (
 	"bytes"
-	"github.com/aemakeye/circuit_calculator/internal/calculator"
 	"github.com/aemakeye/circuit_calculator/internal/config"
+	"github.com/aemakeye/circuit_calculator/internal/storage"
 	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
@@ -93,7 +93,7 @@ func TestNeo4jBasic(t *testing.T) {
 }
 
 func TestNeo4jController_PushNode(t *testing.T) {
-	item := calculator.Item{
+	item := storage.Item{
 		UUID:     "eopifrnv-dlfkvn-dklfv",
 		ID:       6,
 		Value:    "",

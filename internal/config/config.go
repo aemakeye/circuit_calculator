@@ -3,8 +3,8 @@ package config
 import (
 	"bytes"
 	"fmt"
-	"github.com/minio/minio-go/v7"
-	"github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/aemakeye/circuit_calculator/internal/minio"
+	"github.com/aemakeye/circuit_calculator/internal/storage"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
@@ -14,7 +14,7 @@ type CConfig struct {
 	Logger   *zap.Logger
 	Loglevel string
 	Neo4j    *neo4j
-	Minio    *minio.Client
+	Storage  storage.ObjectStorage
 	Filename string
 }
 
@@ -41,18 +41,21 @@ type Neo4j struct {
 
 // Minio structure to unmarshal CConfig file
 type Minio struct {
-	User     string
-	Password string
-	Host     string
-	Port     string
-	Schema   string
+	User     string `json:"user"`
+	Password string `json:"password"`
+	Host     string `json:"host"`
+	Secure   bool   `json:"secure"`
+	Bucket   string `json:"bucket"`
 }
 
 // FileConfig structure to unmarshal CConfig from file
 type FileConfig struct {
-	Loglevel string //`mapstructure:"CALC_LOGLEVEL" json:"Loglevel" yaml:"Loglevel"`
-	Neo4j    Neo4j
-	Minio    Minio
+	Loglevel      string //`mapstructure:"CALC_LOGLEVEL" json:"Loglevel" yaml:"Loglevel"`
+	Neo4j         Neo4j
+	ObjectStorage struct {
+		Minio *Minio `json:"minio,omitempty"`
+		//	maybe another type of storage here
+	} `json:"objectStorage"`
 }
 
 // NewConfig function to create CConfig object with viper from file or reader.
@@ -63,7 +66,7 @@ func NewConfig(logger *zap.Logger, reader *bytes.Reader) (cfg *CConfig, err erro
 		Logger:   nil,
 		Loglevel: "",
 		Neo4j:    &neo4j{},
-		Minio:    &minio.Client{},
+		Storage:  nil,
 		Filename: "",
 	}
 
@@ -105,16 +108,25 @@ func NewConfig(logger *zap.Logger, reader *bytes.Reader) (cfg *CConfig, err erro
 		Password: fc.Neo4j.Password,
 		Endpoint: fc.Neo4j.Host + ":" + fc.Neo4j.Port,
 	}
-
-	cfg.Minio, err = minio.New(
-		fc.Minio.Host,
-		&minio.Options{
-			Creds:  credentials.NewStaticV4(fc.Minio.User, fc.Minio.Password, ""),
-			Secure: false,
-		},
-	)
-	if err != nil {
-		return nil, fmt.Errorf("minio client failed: %s", err)
+	switch {
+	case fc.ObjectStorage.Minio != nil:
+		strg, err := minio.NewMinioStorage(
+			cfg.Logger,
+			fc.ObjectStorage.Minio.Host,
+			fc.ObjectStorage.Minio.Bucket,
+			fc.ObjectStorage.Minio.User,
+			fc.ObjectStorage.Minio.Password,
+			fc.ObjectStorage.Minio.Secure,
+		)
+		if err != nil {
+			logger.Error("could not initialize minio storage",
+				zap.Error(err),
+			)
+			return nil, err
+		}
+		cfg.Storage = strg
+	default:
+		logger.Fatal("no object storage defined")
 	}
 
 	return cfg, nil

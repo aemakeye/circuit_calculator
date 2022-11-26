@@ -16,7 +16,7 @@ var once sync.Once
 var instance *minioStorage
 
 type minioStorage struct {
-	url      string
+	Url      string
 	user     string
 	password string
 	ssl      bool
@@ -25,11 +25,13 @@ type minioStorage struct {
 	Bucket   *minio.BucketInfo
 }
 
-func NewMinioStorage(logger *zap.Logger, url string, bucket string, user string, password string, ssl bool) (instance *minioStorage, err error) {
+func NewMinioStorage(logger *zap.Logger, url string, bucket string, user string, password string, ssl bool) (*minioStorage, error) {
+	var instance *minioStorage
+	var err error
 	once.Do(func() {
 		logger.Info("Creating calculator instance")
 		instance = &minioStorage{
-			url:      url,
+			Url:      url,
 			user:     user,
 			password: password,
 			ssl:      ssl,
@@ -37,24 +39,26 @@ func NewMinioStorage(logger *zap.Logger, url string, bucket string, user string,
 			Logger:   logger,
 			Bucket:   nil,
 		}
-		instance.Client, err = minio.New(instance.url, &minio.Options{
+		instance.Client, err = minio.New(instance.Url, &minio.Options{
 			Creds:  credentials.NewStaticV4(instance.user, instance.password, ""),
 			Secure: instance.ssl,
 		})
 		if err != nil {
 			instance.Logger.Fatal("can not connect to minio",
-				zap.String("url", instance.url),
+				zap.String("Url", instance.Url),
 				zap.String("user", instance.user),
 				zap.Bool("ssl_enabled", instance.ssl),
 			)
 		} else {
 			instance.Logger.Info("minio backend connected successfully")
 		}
-		found, err := instance.Client.BucketExists(context.Background(), bucket)
+		found, errr := instance.Client.BucketExists(context.Background(), bucket)
+		err = errr
 		if err != nil {
-			logger.Fatal("could not find a bucket",
+			logger.Error("could not find a bucket",
 				zap.Error(err),
 			)
+			return
 		}
 		if found {
 			instance.Bucket = &minio.BucketInfo{
@@ -62,12 +66,15 @@ func NewMinioStorage(logger *zap.Logger, url string, bucket string, user string,
 				CreationDate: time.Time{},
 			}
 		} else {
-			logger.Fatal("bucket not found or permissions issue ",
+			logger.Error("bucket not found or permissions issue ",
 				zap.String("bucket name", bucket),
 			)
+
 		}
+		return
 	})
-	return
+
+	return instance, err
 }
 
 func (m minioStorage) UploadTextFile(ctx context.Context, logger *zap.Logger, r io.Reader, path string) (err error) {
@@ -218,4 +225,10 @@ func (m minioStorage) LsVersions(ctx context.Context, path string, logger *zap.L
 	}()
 
 	return rChan, nil
+}
+
+func (m minioStorage) ConfigDump(ctx context.Context, logger *zap.Logger) map[string]string {
+	cfg := make(map[string]string)
+	cfg["url"] = m.Url
+	return cfg
 }

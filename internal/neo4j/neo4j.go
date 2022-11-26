@@ -2,9 +2,9 @@ package neo4j
 
 import (
 	"fmt"
-	"github.com/aemakeye/circuit_calculator/internal/calculator"
 	"github.com/aemakeye/circuit_calculator/internal/config"
 	"github.com/aemakeye/circuit_calculator/internal/drawio"
+	"github.com/aemakeye/circuit_calculator/internal/storage"
 	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
 	"go.uber.org/zap"
 	"strings"
@@ -45,8 +45,8 @@ func NewNeo4j(logger *zap.Logger, c *config.CConfig) (dbc *Neo4jController, err 
 	return instance, nil
 }
 
-//decision on element type is based on Class attribute value and made externally for this func
-func nodeItemAdapter(item calculator.Item) *NodeDTO {
+// decision on element type is based on Class attribute value and made externally for this func
+func nodeItemAdapter(item storage.Item) *NodeDTO {
 	return &NodeDTO{
 		UUID:     item.UUID,
 		ID:       item.ID,
@@ -56,8 +56,8 @@ func nodeItemAdapter(item calculator.Item) *NodeDTO {
 	}
 }
 
-//decision on element type is based on Class attribute value and made externally for this func
-func relationItemAdapter(item calculator.Item) *RelationDTO {
+// decision on element type is based on Class attribute value and made externally for this func
+func relationItemAdapter(item storage.Item) *RelationDTO {
 	return &RelationDTO{
 		UUID:     item.UUID,
 		ID:       item.ID,
@@ -135,7 +135,7 @@ func (neodb *Neo4jController) PushRelation(logger *zap.Logger, dto *RelationDTO)
 	return "", "", err
 }
 
-func (neodb *Neo4jController) PushItem(logger *zap.Logger, item calculator.Item) (string, string, error) {
+func (neodb *Neo4jController) PushItem(logger *zap.Logger, item storage.Item) (string, string, error) {
 	//TODO need to push all items atonce, because need to create all nodes first and edges after.
 	logger.Info("pushing item",
 		zap.String("UUID", item.UUID),
