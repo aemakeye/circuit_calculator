@@ -7,3 +7,5 @@ import (
 type Handler interface {
 	Register(router chi.Router)
 }
+
+// TODO: "github.com/go-chi/cors"

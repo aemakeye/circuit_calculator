@@ -69,6 +69,6 @@ func TestConfig(t *testing.T) {
 		cstring := bytes.NewReader(input)
 		cfg, _ := NewConfig(logger, cstring)
 
-		t.Logf("netip.Addr string: %s", cfg.Listen.Addr().String())
+		t.Logf("netip.Addr string: %s", cfg.Listen.String())
 	})
 }

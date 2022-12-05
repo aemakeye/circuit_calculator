@@ -8,7 +8,6 @@ import (
 	"github.com/minio/minio-go/v7"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
-	"io"
 	"io/ioutil"
 	"strconv"
 	"testing"
@@ -91,27 +90,6 @@ func TestNewMinioStorage(t *testing.T) {
 		t.Logf("%s", info2[0].Name)
 
 	})
-	t.Run("learn getting object", func(t *testing.T) {
-		objReader, err := m.Client.GetObject(
-			context.Background(),
-			bucket,
-			"test-diagram.xml",
-			minio.GetObjectOptions{
-				ServerSideEncryption: nil,
-				VersionID:            "",
-				PartNumber:           0,
-				Checksum:             false,
-				Internal:             minio.AdvancedGetOptions{},
-			},
-		)
-		assert.NoError(t, err)
-		defer objReader.Close()
-
-		buf, err := io.ReadAll(objReader)
-		assert.NoError(t, err)
-
-		t.Logf("%s", buf)
-	})
 
 	t.Run("learn list objects", func(t *testing.T) {
 
@@ -169,5 +147,25 @@ func TestNewMinioStorage(t *testing.T) {
 		)
 		assert.Error(t, err)
 		t.Logf("%s", err)
+	})
+	t.Run("learn list folders only", func(t *testing.T) {
+		for i := 0; i < 3; i++ {
+			_, err := m.Client.PutObject(
+				context.Background(),
+				bucket,
+				"test"+strconv.Itoa(i)+"/test-diagram.xml",
+				bytes.NewReader(diagram),
+				int64(len(diagram)),
+				minio.PutObjectOptions{ContentType: "application/octet-stream"},
+			)
+			assert.NoError(t, err)
+		}
+		t.Logf("test data uploaded")
+		infoChan := m.Ls(context.Background(), "/test/")
+
+		for obj_name := range infoChan {
+			assert.NotEmpty(t, obj_name)
+			t.Logf("obj info: %s", obj_name)
+		}
 	})
 }

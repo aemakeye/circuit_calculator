@@ -166,7 +166,7 @@ func (m minioStorage) Ls(ctx context.Context, path string) <-chan string {
 	chanObjInfo := m.Client.ListObjects(ctx, m.Bucket.Name, minio.ListObjectsOptions{
 		WithVersions: false,
 		WithMetadata: false,
-		Prefix:       "",
+		Prefix:       path,
 		Recursive:    false,
 		MaxKeys:      0,
 		StartAfter:   "",

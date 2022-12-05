@@ -11,7 +11,7 @@ func Graceful(logger *zap.Logger, signals []os.Signal, closeItems ...io.Closer) 
 	sigc := make(chan os.Signal, 1)
 	signal.Notify(sigc, signals...)
 	sig := <-sigc
-	logger.Warn("Caought termination signal. Shutting Down.",
+	logger.Warn("Caught termination signal. Shutting Down.",
 		zap.String("signal", sig.String()),
 	)
 

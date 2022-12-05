@@ -90,7 +90,7 @@ func NewConfig(logger *zap.Logger, reader *bytes.Reader) (cfg *CConfig, err erro
 		v.SetConfigType("yaml")
 		v.AddConfigPath(".")
 		v.AddConfigPath("/")
-		v.SetConfigName("CConfig")
+		v.SetConfigName("config")
 
 		err = v.ReadInConfig()
 	} else {
