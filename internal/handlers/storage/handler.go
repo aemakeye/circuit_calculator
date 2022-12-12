@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"bytes"
 	"encoding/json"
 	"github.com/aemakeye/circuit_calculator/internal/storage"
 	"github.com/go-chi/chi"
@@ -28,6 +29,7 @@ func (h *Handler) Register(r chi.Router) {
 	})
 	r.Route(listUrl, func(r chi.Router) {
 		r.Get("/{project}/", h.ListProjectFiles)
+		r.Get("/{project}", h.ListProjectFiles)
 		r.Get("/", h.ListProjectFiles)
 	})
 }
@@ -47,9 +49,14 @@ func (h *Handler) ListProjectFiles(w http.ResponseWriter, r *http.Request) {
 		items.LsItems = append(items.LsItems, item)
 	}
 
-	u, err := json.Marshal(items)
+	if len(items.LsItems) == 0 {
+		w.WriteHeader(http.StatusNotFound)
+	}
+
+	buf := new(bytes.Buffer)
+	err := json.NewEncoder(buf).Encode(items)
 	if err != nil {
-		h.Logger.Error("error marshaling storage path listing",
+		h.Logger.Error("error in json encoding of storage path listing",
 			zap.String("path", project),
 			zap.Error(err),
 		)
@@ -59,7 +66,7 @@ func (h *Handler) ListProjectFiles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	if _, err := w.Write(u); err != nil {
+	if _, err := w.Write(buf.Bytes()); err != nil {
 		h.Logger.Error("error writing response body",
 			zap.Error(err),
 		)

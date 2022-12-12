@@ -8,6 +8,7 @@ import (
 	"go.uber.org/zap"
 	"io"
 	"io/ioutil"
+	"strings"
 	"sync"
 	"time"
 )
@@ -162,6 +163,9 @@ func (m minioStorage) IsVersioned(ctx context.Context) bool {
 
 // Ls performes list of files actually,  calculator.Diagram has only the name attribute set.
 func (m minioStorage) Ls(ctx context.Context, path string) <-chan string {
+	if !strings.HasSuffix(path, "/") {
+		path = path + "/"
+	}
 	rChan := make(chan string)
 	chanObjInfo := m.Client.ListObjects(ctx, m.Bucket.Name, minio.ListObjectsOptions{
 		WithVersions: false,
