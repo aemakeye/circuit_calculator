@@ -5,13 +5,17 @@ import (
 	"encoding/json"
 	"github.com/aemakeye/circuit_calculator/internal/storage"
 	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/middleware"
 	"go.uber.org/zap"
 	"net/http"
+	"time"
 )
 
 const (
-	uploadUrl = "/api/upload"
-	listUrl   = "/api/ls"
+	uploadUrl       = "/api/upload"
+	listUrl         = "/api/ls"
+	FormFileBody    = "uploadData"
+	DeadLineTimeOut = 10 * time.Second
 )
 
 type Handler struct {
@@ -19,32 +23,73 @@ type Handler struct {
 	Storage storage.ObjectStorage
 }
 
-type storageLsResponse struct {
+type LsResponse struct {
 	LsItems []string `json:"projects"`
 }
 
 func (h *Handler) Register(r chi.Router) {
+	r.Use(middleware.Timeout(DeadLineTimeOut))
 	r.Route(uploadUrl, func(r chi.Router) {
 		r.Post("/", h.UploadFile)
+		r.Post("/{project}", h.UploadFile)
+		r.Post("/{project}/", h.UploadFile)
 	})
 	r.Route(listUrl, func(r chi.Router) {
 		r.Get("/{project}/", h.ListProjectFiles)
 		r.Get("/{project}", h.ListProjectFiles)
 		r.Get("/", h.ListProjectFiles)
 	})
+
 }
 
+// UploadFile upload file to storage
 func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	_ = ctx
+	defer r.Body.Close()
+	err := r.ParseMultipartForm(10 << 20) // 10MB max
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	//w.Header().Set("Content-Type", "application/json")
+
+	project := chi.URLParam(r, "project")
+	// do not allow to write to root of the bucket.
+	if project == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	file, mpfhandler, err := r.FormFile(FormFileBody)
+	if err != nil {
+		h.Logger.Error("failed to upload file",
+			zap.Error(err),
+		)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	err = h.Storage.UploadTextFile(r.Context(), h.Logger, file, project+"/"+mpfhandler.Filename)
+	if err != nil {
+		h.Logger.Error("failed to upload file",
+			zap.Error(err),
+		)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	return
 }
 
+// ListProjectFiles lists existing projects or project content
+// returns http.StatusNotFound in case project name does not exist in storage
 func (h *Handler) ListProjectFiles(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	project := chi.URLParam(r, "project")
 
-	var items storageLsResponse
+	var items LsResponse
 	for item := range h.Storage.Ls(r.Context(), project) {
 		items.LsItems = append(items.LsItems, item)
 	}

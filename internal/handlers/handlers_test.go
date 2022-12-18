@@ -10,8 +10,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -83,14 +85,14 @@ func TestHandlers(t *testing.T) {
 	})
 
 	t.Run("test list project contents, test project name exact match", func(t *testing.T) {
-		type ProjectLs []string
-		var jb map[string]ProjectLs
+
+		var jb storage.LsResponse
 		r := chi.NewRouter()
 
 		// trick not to lose context values here
 		// as context gets vanished while testing
 		// testing /api/ls/{project} here
-		// normaly {project} goes to context
+		// normally {project} goes to context
 		rctx := chi.NewRouteContext()
 		rctx.URLParams.Add("project", "test")
 		h.Register(r)
@@ -103,28 +105,8 @@ func TestHandlers(t *testing.T) {
 		defer res.Body.Close()
 
 		err = json.NewDecoder(res.Body).Decode(&jb)
+		t.Logf("%s", jb)
 		assert.NoError(t, err)
-		assert.Contains(t, jb, "projects")
-		assert.Contains(t, jb["projects"], "test/test-diagram0.xml")
-	})
-
-	t.Run("learn json decode/encode", func(t *testing.T) {
-		//
-		type ProjectLs []string
-
-		var jb map[string]ProjectLs
-		resp := []byte(`{"projects": ["test/diagram.xml", "test/diagram2.xml", "test/diagram3.xml"]}`)
-
-		json.NewDecoder(bytes.NewReader(resp)).Decode(&jb)
-		t.Logf("%v", jb)
-
-		buf := new(bytes.Buffer)
-		err := json.NewEncoder(buf).Encode(jb)
-
-		assert.NoError(t, err)
-
-		t.Logf("%s", buf)
-
 	})
 
 	t.Run("return error  on bad project name", func(t *testing.T) {
@@ -134,7 +116,7 @@ func TestHandlers(t *testing.T) {
 		// trick not to lose context values here
 		// as context gets vanished while testing
 		// testing /api/ls/{project} here
-		// normaly {project} goes to context
+		// normally {project} goes to context
 		rctx := chi.NewRouteContext()
 		rctx.URLParams.Add("project", "test-not-exist")
 		h.Register(r)
@@ -146,7 +128,67 @@ func TestHandlers(t *testing.T) {
 		res := w.Result()
 		defer res.Body.Close()
 
-		assert.NotEqual(t, res.StatusCode, http.StatusOK)
+		assert.NotEqual(t, http.StatusOK, res.StatusCode)
+		assert.Equal(t, http.StatusNotFound, res.StatusCode)
+
+	})
+
+	type testUpload struct {
+		urlParams    map[string]string
+		expectedFail bool
+		expectedCode int
+	}
+
+	vtestUpload := []testUpload{
+		{urlParams: map[string]string{"project": "upload-test"}, expectedFail: false, expectedCode: http.StatusCreated},
+		{urlParams: map[string]string{"project": ""}, expectedFail: true, expectedCode: http.StatusBadRequest},
+	}
+
+	for _, tc := range vtestUpload {
+		t.Run("try upload to "+tc.urlParams["project"], func(t *testing.T) {
+
+			r := chi.NewRouter()
+			rctx := chi.NewRouteContext()
+			//rctx.URLParams.Add("uploadData", "test.txt")
+			rctx.URLParams.Add("project", tc.urlParams["project"])
+			h.Register(r)
+
+			bbuf := &bytes.Buffer{}
+			writer := multipart.NewWriter(bbuf)
+			fw, err := writer.CreateFormFile(storage.FormFileBody, "test.txt")
+			assert.NoError(t, err)
+			_, err = io.Copy(fw, strings.NewReader("hello"))
+			writer.Close()
+
+			req := httptest.NewRequest(http.MethodPost, "/api/upload/upload-test/test.txt", bytes.NewReader(bbuf.Bytes()))
+			req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+			req.Header.Set("Content-Type", writer.FormDataContentType())
+			w := httptest.NewRecorder()
+			h.UploadFile(w, req)
+			res := w.Result()
+			defer res.Body.Close()
+
+			assert.Equal(t, tc.expectedCode, res.StatusCode)
+		})
+
+	}
+
+	t.Run("learn json decode/encode", func(t *testing.T) {
+		//
+
+		var jb storage.LsResponse
+		resp := []byte(`{"projects": ["test/diagram.xml", "test/diagram2.xml", "test/diagram3.xml"]}`)
+
+		json.NewDecoder(bytes.NewReader(resp)).Decode(&jb)
+
+		t.Logf("encode: %v", jb)
+
+		buf := new(bytes.Buffer)
+		err := json.NewEncoder(buf).Encode(jb)
+
+		assert.NoError(t, err)
+
+		t.Logf("decode: %s", buf)
 
 	})
 }

@@ -236,3 +236,7 @@ func (m minioStorage) ConfigDump(ctx context.Context, logger *zap.Logger) map[st
 	cfg["url"] = m.Url
 	return cfg
 }
+
+func (m minioStorage) DeleteFile(ctx context.Context, logger *zap.Logger, path string) error {
+	panic("not implemented")
+}

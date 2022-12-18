@@ -8,6 +8,7 @@ import (
 
 type ObjectStorage interface {
 	ConfigDump(ctx context.Context, logger *zap.Logger) map[string]string
+	DeleteFile(ctx context.Context, logger *zap.Logger, path string) error
 	UploadTextFile(ctx context.Context, logger *zap.Logger, r io.Reader, path string) error
 	LoadFileByName(ctx context.Context, logger *zap.Logger, path string, version string) (io.Reader, error)
 	IsVersioned(ctx context.Context) bool
