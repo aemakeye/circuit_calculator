@@ -117,7 +117,7 @@ func NewItemDTO(mx *MxCell, uuid string) *ItemDTO {
 	return &item
 }
 
-// LoadDocument converts incomming document from xml to a slice of ItemDTO objects
+// ReadInDiagram converts incoming document from xml to a slice of ItemDTO objects
 func (c *Controller) ReadInDiagram(ctx context.Context, logger *zap.Logger, xmldoc *bytes.Reader) (uuid string, _ []calculator.Item, err error) {
 
 	logger.Info("processing new document")
@@ -171,6 +171,6 @@ func ItemsAdapter(logger *zap.Logger, itemsdto []ItemDTO) (citems []calculator.I
 }
 
 func (c *Controller) UpdateDiagram(ctx context.Context, logger *zap.Logger, diaUUID string) error {
+	panic("implement me")
 
-	return nil
 }

@@ -12,8 +12,9 @@ import (
 )
 
 const (
-	uploadUrl       = "/api/upload"
-	listUrl         = "/api/ls"
+	loadUrl         = "/api/ostorage/load"
+	listUrl         = "/api/ostorage/ls"
+	uploadUrl       = "/api/ostorage/upload"
 	FormFileBody    = "uploadData"
 	DeadLineTimeOut = 10 * time.Second
 )
@@ -29,6 +30,10 @@ type LsResponse struct {
 
 func (h *Handler) Register(r chi.Router) {
 	r.Use(middleware.Timeout(DeadLineTimeOut))
+	r.Route(loadUrl, func(r chi.Router) {
+		r.Get("/{filename}", h.LoadFile)
+		r.Get("/{filename}/", h.LoadFile)
+	})
 	r.Route(uploadUrl, func(r chi.Router) {
 		r.Post("/", h.UploadFile)
 		r.Post("/{project}", h.UploadFile)
@@ -116,5 +121,9 @@ func (h *Handler) ListProjectFiles(w http.ResponseWriter, r *http.Request) {
 			zap.Error(err),
 		)
 	}
+
+}
+
+func (h *Handler) LoadFile(w http.ResponseWriter, r *http.Request) {
 
 }

@@ -60,8 +60,8 @@ var diagram = []byte(`
 `)
 
 func TestCalculator_ReadInDiagram(t *testing.T) {
-	//logger := zap.NewNop()
-	//conf := config.CConfig{
+	//Logger := zap.NewNop()
+	//conf := Config.CConfig{
 	//	Logger:   nil,
 	//	Loglevel: "",
 	//	Neo4j:    nil,
@@ -72,7 +72,7 @@ func TestCalculator_ReadInDiagram(t *testing.T) {
 	//defer ctrl.Finish()
 	//gs := mock_calculator.NewMockGraphStorage(ctrl)
 	//os := mock_calculator.NewMockObjectStorage(ctrl)
-	//calc, _ := NewCalculator(logger, &conf, *gs.(GraphStorage), os)
+	//calc, _ := NewCalculator(Logger, &conf, *gs.(GraphStorage), os)
 	//diagramReader := bytes.NewReader(diagram)
 	//_ =  calc
 	//_ = diagramReader

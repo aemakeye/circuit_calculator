@@ -7,24 +7,29 @@ import (
 	"github.com/aemakeye/circuit_calculator/internal/storage"
 	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
 	"go.uber.org/zap"
+	"io"
 	"strings"
 	"sync"
 	"text/template"
 )
 
-type Neo4jController struct {
+const (
+	relationQueueSize = 100
+)
+
+type Controller struct {
 	Logger *zap.Logger
 	Config neo4j.Config
 	Driver *neo4j.Driver
 }
 
-var instance *Neo4jController
+var instance *Controller
 var once sync.Once
 
-func NewNeo4j(logger *zap.Logger, c *config.CConfig) (dbc *Neo4jController, err error) {
+func NewNeo4j(logger *zap.Logger, c *config.CConfig) (dbc *Controller, err error) {
 	once.Do(func() {
 		logger.Info("creating neo4j controlling structure")
-		instance = &Neo4jController{}
+		instance = &Controller{}
 	})
 
 	//TODO recall to close driver properly
@@ -34,7 +39,7 @@ func NewNeo4j(logger *zap.Logger, c *config.CConfig) (dbc *Neo4jController, err 
 		logger.Error("failed to create neo4j driver instance",
 			zap.Error(err),
 		)
-		return &Neo4jController{
+		return &Controller{
 			Logger: nil,
 			Config: neo4j.Config{},
 			Driver: nil,
@@ -70,7 +75,7 @@ func relationItemAdapter(item storage.Item) *RelationDTO {
 	}
 }
 
-func (neodb *Neo4jController) PushNode(logger *zap.Logger, dto *NodeDTO) (uuid string, id string, err error) {
+func (c *Controller) PushNode(logger *zap.Logger, dto *NodeDTO) (uuid string, id string, err error) {
 	cypherq := "MERGE (item:Element {" +
 		"uuid: '" + dto.UUID + "', " +
 		"id: '" + fmt.Sprintf("%d", dto.ID) + "', " +
@@ -79,7 +84,7 @@ func (neodb *Neo4jController) PushNode(logger *zap.Logger, dto *NodeDTO) (uuid s
 		"SubClass: '" + dto.SubClass + "'" +
 		"}) " +
 		"RETURN COALESCE(item.uuid,\"\")+':'+COALESCE(item.id,\"\")"
-	driver := *neodb.Driver
+	driver := *c.Driver
 	session := driver.NewSession(neo4j.SessionConfig{AccessMode: neo4j.AccessModeWrite})
 	defer session.Close()
 
@@ -112,7 +117,7 @@ func (neodb *Neo4jController) PushNode(logger *zap.Logger, dto *NodeDTO) (uuid s
 	return tresultSplit[0], tresultSplit[1], nil
 }
 
-func (neodb *Neo4jController) PushRelation(logger *zap.Logger, dto *RelationDTO) (uuid string, id string, err error) {
+func (c *Controller) PushRelation(logger *zap.Logger, dto *RelationDTO) (uuid string, id string, err error) {
 	//TODO: return (specific) error if no source or target for relation/edge
 	//https://neo4j.com/docs/cypher-manual/current/clauses/merge/#merge-merge-on-a-relationship
 	cypherqTemplate := template.New("pushRelation")
@@ -135,7 +140,7 @@ func (neodb *Neo4jController) PushRelation(logger *zap.Logger, dto *RelationDTO)
 	return "", "", err
 }
 
-func (neodb *Neo4jController) PushItem(logger *zap.Logger, item storage.Item) (string, string, error) {
+func (c *Controller) PushItem(logger *zap.Logger, item storage.Item) (string, string, error) {
 	//TODO need to push all items atonce, because need to create all nodes first and edges after.
 	logger.Info("pushing item",
 		zap.String("UUID", item.UUID),
@@ -143,7 +148,7 @@ func (neodb *Neo4jController) PushItem(logger *zap.Logger, item storage.Item) (s
 	)
 
 	if item.Class == "lines" {
-		uuid, id, err := neodb.PushRelation(logger, relationItemAdapter(item))
+		uuid, id, err := c.PushRelation(logger, relationItemAdapter(item))
 		if err != nil {
 			logger.Error("failed to create relation",
 				zap.String("UUID", item.UUID),
@@ -156,7 +161,7 @@ func (neodb *Neo4jController) PushItem(logger *zap.Logger, item storage.Item) (s
 	}
 	_, cAllowed := drawio.ItemAvailableClass[item.Class]
 	if item.Class != "lines" && cAllowed == true {
-		uuid, id, err := neodb.PushNode(logger, nodeItemAdapter(item))
+		uuid, id, err := c.PushNode(logger, nodeItemAdapter(item))
 		if err != nil {
 			logger.Error("failed to create node",
 				zap.String("UUID", item.UUID),
@@ -168,6 +173,11 @@ func (neodb *Neo4jController) PushItem(logger *zap.Logger, item storage.Item) (s
 		return uuid, id, nil
 	}
 	return "", "", fmt.Errorf("item is not a node and not an edge")
+}
+
+func (c *Controller) PushDiagram(logger *zap.Logger, diagram io.Reader) (uuid string, err error) {
+
+	return uuid, nil
 }
 
 //func NewDTO(mx *MxCell, uuid string) (interface{}, error) {

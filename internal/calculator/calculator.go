@@ -4,29 +4,32 @@ import (
 	"bytes"
 	"context"
 	"github.com/aemakeye/circuit_calculator/internal/config"
+	"github.com/aemakeye/circuit_calculator/internal/drawio"
 	"github.com/aemakeye/circuit_calculator/internal/storage"
 	"go.uber.org/zap"
 	"sync"
 )
 
-type calculator struct {
-	logger      *zap.Logger
-	config      *config.CConfig
-	gstorage    storage.GraphStorage
-	textStorage storage.ObjectStorage
+type Calculator struct {
+	Logger           *zap.Logger
+	Config           *config.CConfig
+	Gstorage         storage.GraphStorage
+	TextStorage      storage.ObjectStorage
+	DiagramConverter *drawio.Controller
 }
 
-var instance *calculator
+var instance *Calculator
 var once sync.Once
 
-func NewCalculator(logger *zap.Logger, config *config.CConfig, gs storage.GraphStorage, os storage.ObjectStorage) (*calculator, error) {
+func NewCalculator(logger *zap.Logger, config *config.CConfig, gs storage.GraphStorage, os storage.ObjectStorage) (*Calculator, error) {
 	once.Do(func() {
-		logger.Info("creating calculator instance")
-		instance = &calculator{
-			logger:      logger,
-			config:      config,
-			gstorage:    gs,
-			textStorage: os,
+		logger.Info("creating Calculator instance")
+		instance = &Calculator{
+			Logger:           logger,
+			Config:           config,
+			Gstorage:         gs,
+			TextStorage:      os,
+			DiagramConverter: drawio.NewController(logger),
 		}
 	})
 
@@ -34,6 +37,6 @@ func NewCalculator(logger *zap.Logger, config *config.CConfig, gs storage.GraphS
 }
 
 type DiagramService interface {
-	ReadInDiagram(ctx context.Context, logger *zap.Logger, xmldoc *bytes.Reader) (uuid string, items []storage.Item, err error)
+	ReadInDiagram(ctx context.Context, logger *zap.Logger, xmldoc *bytes.Reader) (uuid string, items []Item, err error)
 	UpdateDiagram(ctx context.Context, logger *zap.Logger, diaUUID string) error
 }

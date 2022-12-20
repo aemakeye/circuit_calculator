@@ -1,11 +1,10 @@
-package handlers
+package storage
 
 import (
 	"bytes"
 	"context"
 	"encoding/json"
 	"github.com/aemakeye/circuit_calculator/internal/config"
-	"github.com/aemakeye/circuit_calculator/internal/handlers/storage"
 	"github.com/go-chi/chi"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
@@ -16,21 +15,6 @@ import (
 	"strings"
 	"testing"
 )
-
-func TestLearnBasics(t *testing.T) {
-	t.Run("learn JSON marshal", func(t *testing.T) {
-		type target struct {
-			Names []string `json:"names"`
-		}
-
-		trg := target{Names: []string{"name1", "name2", "name3"}}
-
-		jt, err := json.Marshal(trg)
-		assert.NoError(t, err)
-
-		t.Logf("json: \n%s", jt)
-	})
-}
 
 func TestHandlers(t *testing.T) {
 	var input = []byte(`
@@ -64,7 +48,7 @@ func TestHandlers(t *testing.T) {
 	cfg, err := config.NewConfig(logger, bytes.NewReader(input))
 	assert.NoError(t, err)
 
-	h := storage.Handler{
+	h := Handler{
 		Logger:  logger,
 		Storage: cfg.Storage,
 	}
@@ -86,7 +70,7 @@ func TestHandlers(t *testing.T) {
 
 	t.Run("test list project contents, test project name exact match", func(t *testing.T) {
 
-		var jb storage.LsResponse
+		var jb LsResponse
 		r := chi.NewRouter()
 
 		// trick not to lose context values here
@@ -155,7 +139,7 @@ func TestHandlers(t *testing.T) {
 
 			bbuf := &bytes.Buffer{}
 			writer := multipart.NewWriter(bbuf)
-			fw, err := writer.CreateFormFile(storage.FormFileBody, "test.txt")
+			fw, err := writer.CreateFormFile(FormFileBody, "test.txt")
 			assert.NoError(t, err)
 			_, err = io.Copy(fw, strings.NewReader("hello"))
 			writer.Close()
@@ -176,7 +160,7 @@ func TestHandlers(t *testing.T) {
 	t.Run("learn json decode/encode", func(t *testing.T) {
 		//
 
-		var jb storage.LsResponse
+		var jb LsResponse
 		resp := []byte(`{"projects": ["test/diagram.xml", "test/diagram2.xml", "test/diagram3.xml"]}`)
 
 		json.NewDecoder(bytes.NewReader(resp)).Decode(&jb)
