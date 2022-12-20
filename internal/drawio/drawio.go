@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"github.com/aemakeye/circuit_calculator/internal/calculator"
 	"go.uber.org/zap"
-	"io/ioutil"
+	"io"
 	"strconv"
 	"strings"
 	"sync"
@@ -117,12 +117,14 @@ func NewItemDTO(mx *MxCell, uuid string) *ItemDTO {
 	return &item
 }
 
-// ReadInDiagram converts incoming document from xml to a slice of ItemDTO objects
-func (c *Controller) ReadInDiagram(ctx context.Context, logger *zap.Logger, xmldoc *bytes.Reader) (uuid string, _ []calculator.Item, err error) {
+// ReadInDiagram converts incoming document from xml to a channel of calculator.Item  objects
+func (c *Controller) ReadInDiagram(ctx context.Context, logger *zap.Logger, xmldoc *bytes.Reader) (uuid string, _ <-chan calculator.Item, err error) {
+	ch := make(chan calculator.Item, 1)
+	defer close(ch)
 
 	logger.Info("processing new document")
 	D := &Mxfile{}
-	xmlbytes, err := ioutil.ReadAll(xmldoc)
+	xmlbytes, err := io.ReadAll(xmldoc)
 	if err != nil {
 		logger.Error("could not read in the document",
 			zap.Error(err),
@@ -142,32 +144,26 @@ func (c *Controller) ReadInDiagram(ctx context.Context, logger *zap.Logger, xmld
 	if uuid == "" {
 		return uuid, nil, fmt.Errorf("no diagram id in document")
 	}
-	var items []ItemDTO
 	for _, item := range D.Diagram.MxGraphModel.Root.MxCells {
-		items = append(items, *NewItemDTO(&item, uuid))
+		ch <- ItemsAdapter(c.logger, *NewItemDTO(&item, uuid))
 	}
-
-	return uuid, ItemsAdapter(logger, items), err
+	return uuid, ch, err
 }
 
-func ItemsAdapter(logger *zap.Logger, itemsdto []ItemDTO) (citems []calculator.Item) {
-	for _, item := range itemsdto {
-		citems = append(citems, calculator.Item{
-			UUID:     item.UUID,
-			ID:       item.ID,
-			Value:    item.Value,
-			Class:    item.Class,
-			SubClass: item.SubClass,
-			SourceId: item.SourceId,
-			TargetId: item.TargetId,
-			ExitX:    item.ExitX,
-			ExitY:    item.ExitY,
-			EntryX:   item.EntryY,
-			EntryY:   item.EntryY,
-		})
-
+func ItemsAdapter(logger *zap.Logger, item ItemDTO) (citems calculator.Item) {
+	return calculator.Item{
+		UUID:     item.UUID,
+		ID:       item.ID,
+		Value:    item.Value,
+		Class:    item.Class,
+		SubClass: item.SubClass,
+		SourceId: item.SourceId,
+		TargetId: item.TargetId,
+		ExitX:    item.ExitX,
+		ExitY:    item.ExitY,
+		EntryX:   item.EntryY,
+		EntryY:   item.EntryY,
 	}
-	return citems
 }
 
 func (c *Controller) UpdateDiagram(ctx context.Context, logger *zap.Logger, diaUUID string) error {

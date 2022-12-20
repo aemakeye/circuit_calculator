@@ -3,6 +3,8 @@ package config
 import (
 	"bytes"
 	"fmt"
+	"github.com/aemakeye/circuit_calculator/internal/calculator"
+	"github.com/aemakeye/circuit_calculator/internal/drawio"
 	"github.com/aemakeye/circuit_calculator/internal/minio"
 	"github.com/aemakeye/circuit_calculator/internal/storage"
 	"github.com/spf13/viper"
@@ -16,12 +18,13 @@ const (
 
 // CConfig internal structure
 type CConfig struct {
-	Listen   netip.AddrPort
-	Logger   *zap.Logger
-	Loglevel string
-	Neo4j    *neo4j
-	Storage  storage.ObjectStorage
-	Filename string
+	DiagramSvc calculator.DiagramService
+	Listen     netip.AddrPort
+	Logger     *zap.Logger
+	Loglevel   string
+	Neo4j      *neo4j
+	Storage    storage.ObjectStorage
+	Filename   string
 }
 
 // neo4j internal structure
@@ -70,11 +73,12 @@ type FileConfig struct {
 func NewConfig(logger *zap.Logger, reader *bytes.Reader) (cfg *CConfig, err error) {
 
 	cfg = &CConfig{
-		Logger:   nil,
-		Loglevel: "",
-		Neo4j:    &neo4j{},
-		Storage:  nil,
-		Filename: "",
+		DiagramSvc: drawio.NewController(logger),
+		Logger:     nil,
+		Loglevel:   "",
+		Neo4j:      &neo4j{},
+		Storage:    nil,
+		Filename:   "",
 	}
 
 	cfg.Logger = logger
