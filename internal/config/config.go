@@ -17,7 +17,7 @@ const (
 
 // CConfig internal structure
 type CConfig struct {
-	DiagramSvc calculator.DiagramService
+	DiagramSvc calculator.DiagramProcessor
 	Listen     netip.AddrPort
 	Logger     *zap.Logger
 	Loglevel   string

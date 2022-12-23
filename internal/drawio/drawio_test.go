@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/xml"
 	"fmt"
-	"github.com/aemakeye/circuit_calculator/internal/diagram"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
 	"reflect"
@@ -304,9 +303,9 @@ func TestController_LoadDocument(t *testing.T) {
 			logger := zap.NewNop()
 			ctrlr := NewController(logger)
 			itemsFound := 0
-			chanItems := make(chan diagram.Item)
+			chanItems := make(chan Item)
 
-			go func(ch <-chan diagram.Item) {
+			go func(ch <-chan Item) {
 				for {
 					select {
 					case di := <-ch:

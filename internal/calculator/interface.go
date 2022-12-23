@@ -1,7 +1,9 @@
 package calculator
 
 import (
+	"bytes"
 	"context"
+	"github.com/aemakeye/circuit_calculator/internal/drawio"
 	"github.com/aemakeye/circuit_calculator/internal/storage"
 	"go.uber.org/zap"
 	"io"
@@ -20,4 +22,13 @@ type ObjectStorage interface {
 type GraphStorage interface {
 	PushItem(logger *zap.Logger, item storage.Item) (uuid string, id string, err error)
 	PushDiagram(logger *zap.Logger, diagramtxt io.Reader) (uuid string, err error)
+}
+
+type DiagramProcessor interface {
+	ReadInDiagram(ctx context.Context, logger *zap.Logger, xmldoc *bytes.Reader, ch chan drawio.Item) (uuid string, err error)
+}
+
+type DiagramService interface {
+	ReadInDiagram(ctx context.Context, logger *zap.Logger, xmldoc *bytes.Reader) (uuid string, _ <-chan drawio.Item, err error)
+	UpdateDiagram(ctx context.Context, logger *zap.Logger, diaUUID string) error
 }

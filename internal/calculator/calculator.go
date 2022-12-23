@@ -11,7 +11,7 @@ type Calculator struct {
 	Config      *config.CConfig
 	Gstorage    GraphStorage
 	TextStorage ObjectStorage
-	DiagramSvc  DiagramService
+	DiagramSvc  DiagramProcessor
 }
 
 var instance *Calculator

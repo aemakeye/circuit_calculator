@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/xml"
 	"fmt"
-	"github.com/aemakeye/circuit_calculator/internal/diagram"
 	"go.uber.org/zap"
 	"io"
 	"strconv"
@@ -22,6 +21,20 @@ var ItemAvailableClass = map[string]struct{}{
 
 type Controller struct {
 	logger *zap.Logger
+}
+
+type Item struct {
+	UUID     string
+	ID       int
+	Value    string
+	Class    string
+	SubClass string
+	SourceId int
+	TargetId int
+	ExitX    float32
+	ExitY    float32
+	EntryX   float32
+	EntryY   float32
 }
 
 var instance *Controller
@@ -118,7 +131,7 @@ func NewItemDTO(mx *MxCell, uuid string) ItemDTO {
 }
 
 // ReadInDiagram converts incoming document from xml to a channel of diagram.Item  objects
-func (c *Controller) ReadInDiagram(ctx context.Context, logger *zap.Logger, xmldoc *bytes.Reader, ch chan diagram.Item) (uuid string, err error) {
+func (c *Controller) ReadInDiagram(ctx context.Context, logger *zap.Logger, xmldoc *bytes.Reader, ch chan Item) (uuid string, err error) {
 	logger.Info("processing new document")
 	D := &Mxfile{}
 	xmlbytes, err := io.ReadAll(xmldoc)
@@ -155,8 +168,8 @@ func (c *Controller) ReadInDiagram(ctx context.Context, logger *zap.Logger, xmld
 	return uuid, err
 }
 
-func ItemsAdapter(item ItemDTO) diagram.Item {
-	return diagram.Item{
+func ItemsAdapter(item ItemDTO) Item {
+	return Item{
 		UUID:     item.UUID,
 		ID:       item.ID,
 		Value:    item.Value,
