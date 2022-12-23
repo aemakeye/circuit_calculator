@@ -3,7 +3,7 @@ package storage
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/aemakeye/circuit_calculator/internal/storage"
+	"github.com/aemakeye/circuit_calculator/internal/calculator"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
 	"go.uber.org/zap"
@@ -21,7 +21,7 @@ const (
 
 type Handler struct {
 	Logger  *zap.Logger
-	Storage storage.ObjectStorage
+	Storage calculator.ObjectStorage
 }
 
 type LsResponse struct {

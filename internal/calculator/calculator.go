@@ -2,7 +2,6 @@ package calculator
 
 import (
 	"github.com/aemakeye/circuit_calculator/internal/config"
-	"github.com/aemakeye/circuit_calculator/internal/storage"
 	"go.uber.org/zap"
 	"sync"
 )
@@ -10,15 +9,15 @@ import (
 type Calculator struct {
 	Logger      *zap.Logger
 	Config      *config.CConfig
-	Gstorage    storage.GraphStorage
-	TextStorage storage.ObjectStorage
+	Gstorage    GraphStorage
+	TextStorage ObjectStorage
 	DiagramSvc  DiagramService
 }
 
 var instance *Calculator
 var once sync.Once
 
-func NewCalculator(logger *zap.Logger, config *config.CConfig, gs storage.GraphStorage, os storage.ObjectStorage) (*Calculator, error) {
+func NewCalculator(logger *zap.Logger, config *config.CConfig, gs GraphStorage, os ObjectStorage) (*Calculator, error) {
 	once.Do(func() {
 		logger.Info("creating Calculator instance")
 		instance = &Calculator{

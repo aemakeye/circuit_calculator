@@ -1,7 +1,8 @@
-package storage
+package calculator
 
 import (
 	"context"
+	"github.com/aemakeye/circuit_calculator/internal/storage"
 	"go.uber.org/zap"
 	"io"
 )
@@ -17,6 +18,6 @@ type ObjectStorage interface {
 }
 
 type GraphStorage interface {
-	PushItem(logger *zap.Logger, item Item) (uuid string, id string, err error)
+	PushItem(logger *zap.Logger, item storage.Item) (uuid string, id string, err error)
 	PushDiagram(logger *zap.Logger, diagramtxt io.Reader) (uuid string, err error)
 }

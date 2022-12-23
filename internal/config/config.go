@@ -6,7 +6,6 @@ import (
 	"github.com/aemakeye/circuit_calculator/internal/calculator"
 	"github.com/aemakeye/circuit_calculator/internal/drawio"
 	"github.com/aemakeye/circuit_calculator/internal/minio"
-	"github.com/aemakeye/circuit_calculator/internal/storage"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"net/netip"
@@ -23,7 +22,7 @@ type CConfig struct {
 	Logger     *zap.Logger
 	Loglevel   string
 	Neo4j      *neo4j
-	Storage    storage.ObjectStorage
+	Storage    calculator.ObjectStorage
 	Filename   string
 }
 

@@ -59,7 +59,7 @@ func (h *Handler) UploadDiagram(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dctr := h.Calculator.DiagramConverter
+	dctr := h.Calculator.DiagramSvc
 	_ = dctr
 
 	//uuid, err := h.Calculator.Gstorage.PushDiagram(h.Logger, file)
