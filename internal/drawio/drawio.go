@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/xml"
 	"fmt"
-	"github.com/aemakeye/circuit_calculator/internal/calculator"
+	"github.com/aemakeye/circuit_calculator/internal/diagram"
 	"go.uber.org/zap"
 	"io"
 	"strconv"
@@ -84,7 +84,7 @@ func (sh *style) UnmarshalXMLAttr(attr xml.Attr) error {
 	return nil
 }
 
-func NewItemDTO(mx *MxCell, uuid string) *ItemDTO {
+func NewItemDTO(mx *MxCell, uuid string) ItemDTO {
 	item := ItemDTO{
 		UUID:  uuid,
 		ID:    mx.Id,
@@ -114,14 +114,11 @@ func NewItemDTO(mx *MxCell, uuid string) *ItemDTO {
 		item.SubClass = "line"
 	}
 
-	return &item
+	return item
 }
 
-// ReadInDiagram converts incoming document from xml to a channel of calculator.Item  objects
-func (c *Controller) ReadInDiagram(ctx context.Context, logger *zap.Logger, xmldoc *bytes.Reader) (uuid string, _ <-chan calculator.Item, err error) {
-	ch := make(chan calculator.Item, 1)
-	defer close(ch)
-
+// ReadInDiagram converts incoming document from xml to a channel of diagram.Item  objects
+func (c *Controller) ReadInDiagram(ctx context.Context, logger *zap.Logger, xmldoc *bytes.Reader, ch chan diagram.Item) (uuid string, err error) {
 	logger.Info("processing new document")
 	D := &Mxfile{}
 	xmlbytes, err := io.ReadAll(xmldoc)
@@ -129,7 +126,7 @@ func (c *Controller) ReadInDiagram(ctx context.Context, logger *zap.Logger, xmld
 		logger.Error("could not read in the document",
 			zap.Error(err),
 		)
-		return uuid, nil, err
+		return uuid, err
 	}
 
 	err = xml.Unmarshal(xmlbytes, D)
@@ -137,21 +134,29 @@ func (c *Controller) ReadInDiagram(ctx context.Context, logger *zap.Logger, xmld
 		logger.Error("can not unmarshal document",
 			zap.Error(err),
 		)
-		return uuid, nil, err
+		return uuid, err
 	}
 
 	uuid = D.Diagram.Id
 	if uuid == "" {
-		return uuid, nil, fmt.Errorf("no diagram id in document")
+		return uuid, fmt.Errorf("no diagram id in document")
 	}
 	for _, item := range D.Diagram.MxGraphModel.Root.MxCells {
-		ch <- ItemsAdapter(c.logger, *NewItemDTO(&item, uuid))
+		if item.Style.attrs == nil {
+			logger.Debug("skipping element with no attributes",
+				zap.Int("id", item.Id),
+			)
+			continue
+		}
+		di := NewItemDTO(&item, uuid)
+		ch <- ItemsAdapter(di)
 	}
-	return uuid, ch, err
+
+	return uuid, err
 }
 
-func ItemsAdapter(logger *zap.Logger, item ItemDTO) (citems calculator.Item) {
-	return calculator.Item{
+func ItemsAdapter(item ItemDTO) diagram.Item {
+	return diagram.Item{
 		UUID:     item.UUID,
 		ID:       item.ID,
 		Value:    item.Value,
