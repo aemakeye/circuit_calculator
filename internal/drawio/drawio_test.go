@@ -186,7 +186,7 @@ func TestNewItemDTO(t *testing.T) {
 	}
 }
 
-func TestController_LoadDocument_Errors(t *testing.T) {
+func TestController_XmlToItems_Errors(t *testing.T) {
 	tests := []struct {
 		name           string
 		document       []byte
@@ -209,7 +209,7 @@ func TestController_LoadDocument_Errors(t *testing.T) {
 			logger := zap.NewNop()
 			ctrlr := NewController(logger)
 
-			_, err := ctrlr.ReadInDiagram(context.Background(), logger, bytes.NewReader(test.document), nil)
+			_, err := ctrlr.XmlToItems(context.Background(), logger, bytes.NewReader(test.document), nil)
 			assert.Error(t, err)
 			assert.Equal(t, test.expectedError, err)
 
@@ -217,7 +217,7 @@ func TestController_LoadDocument_Errors(t *testing.T) {
 	}
 }
 
-func TestController_LoadDocument(t *testing.T) {
+func TestController_XmlToItems(t *testing.T) {
 	tests := []struct {
 		name           string
 		document       []byte
@@ -326,7 +326,7 @@ func TestController_LoadDocument(t *testing.T) {
 			//	}
 			//}(chanItems)
 
-			_, _ = ctrlr.ReadInDiagram(context.Background(), logger, bytes.NewReader(test.document), chanItems)
+			_, _ = ctrlr.XmlToItems(context.Background(), logger, bytes.NewReader(test.document), chanItems)
 			assert.Equal(t, itemsFound, test.expectedResult)
 
 		})

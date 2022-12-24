@@ -12,11 +12,18 @@ import (
 	"sync"
 )
 
+const (
+	ItemClassLines      = "lines"
+	ItemClassResistors  = "resistors"
+	ItemClassCapacitors = "capacitors"
+	ItemClassInductors  = "inductors"
+)
+
 var ItemAvailableClass = map[string]struct{}{
-	"resistors":  struct{}{},
-	"capacitors": {},
-	"inductors":  {},
-	"lines":      {},
+	ItemClassResistors:  {},
+	ItemClassCapacitors: {},
+	ItemClassInductors:  {},
+	ItemClassLines:      {},
 }
 
 type Controller struct {
@@ -131,7 +138,7 @@ func NewItemDTO(mx *MxCell, uuid string) ItemDTO {
 }
 
 // ReadInDiagram converts incoming document from xml to a channel of diagram.Item  objects
-func (c *Controller) ReadInDiagram(ctx context.Context, logger *zap.Logger, xmldoc *bytes.Reader, ch chan Item) (uuid string, err error) {
+func (c *Controller) XmlToItems(ctx context.Context, logger *zap.Logger, xmldoc *bytes.Reader, ch chan Item) (uuid string, err error) {
 	logger.Info("processing new document")
 	D := &Mxfile{}
 	xmlbytes, err := io.ReadAll(xmldoc)
@@ -182,9 +189,4 @@ func ItemsAdapter(item ItemDTO) Item {
 		EntryX:   item.EntryY,
 		EntryY:   item.EntryY,
 	}
-}
-
-func (c *Controller) UpdateDiagram(ctx context.Context, logger *zap.Logger, diaUUID string) error {
-	panic("implement me")
-
 }

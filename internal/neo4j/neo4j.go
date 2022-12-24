@@ -7,7 +7,6 @@ import (
 	"github.com/aemakeye/circuit_calculator/internal/storage"
 	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
 	"go.uber.org/zap"
-	"io"
 	"strings"
 	"sync"
 	"text/template"
@@ -75,46 +74,54 @@ func relationItemAdapter(item storage.Item) *RelationDTO {
 	}
 }
 
-func (c *Controller) PushNode(logger *zap.Logger, dto *NodeDTO) (uuid string, id string, err error) {
-	cypherq := "MERGE (item:Element {" +
-		"uuid: '" + dto.UUID + "', " +
-		"id: '" + fmt.Sprintf("%d", dto.ID) + "', " +
-		"Value: '" + dto.Value + "', " +
-		"Class: '" + dto.Class + "', " +
-		"SubClass: '" + dto.SubClass + "'" +
-		"}) " +
-		"RETURN COALESCE(item.uuid,\"\")+':'+COALESCE(item.id,\"\")"
+func (c *Controller) PushNodes(logger *zap.Logger, chitem <-chan drawio.Item) (uuid string, id string, err error) {
 	driver := *c.Driver
 	session := driver.NewSession(neo4j.SessionConfig{AccessMode: neo4j.AccessModeWrite})
 	defer session.Close()
 
-	tresult, err := session.WriteTransaction(
-		func(tx neo4j.Transaction) (interface{}, error) {
-			result, e := tx.Run(
-				cypherq, map[string]interface{}{},
-			)
-			_ = result
-			if e != nil {
-				return nil, e
-			}
-			if result.Next() {
-				return result.Record().Values[0], nil
-			}
+	for {
+		select {
+		case item := <-chitem:
+			cypherq := "MERGE (item:Element {" +
+				"uuid: '" + item.UUID + "', " +
+				"id: '" + fmt.Sprintf("%d", item.ID) + "', " +
+				"Value: '" + item.Value + "', " +
+				"Class: '" + item.Class + "', " +
+				"SubClass: '" + item.SubClass + "'" +
+				"}) " +
+				"RETURN COALESCE(item.uuid,\"\")+':'+COALESCE(item.id,\"\")"
 
-			return nil, nil
-		},
-	)
-	if err != nil {
-		logger.Error("error on transaction",
-			zap.Error(err),
-		)
-		return "", "", err
+			tresult, err := session.WriteTransaction(
+				func(tx neo4j.Transaction) (interface{}, error) {
+					result, e := tx.Run(
+						cypherq, map[string]interface{}{},
+					)
+					_ = result
+					if e != nil {
+						return nil, e
+					}
+					if result.Next() {
+						return result.Record().Values[0], nil
+					}
+					return nil, nil
+				},
+			)
+			if err != nil {
+				logger.Error("error on transaction",
+					zap.Error(err),
+				)
+				return "", "", err
+			}
+			logger.Info("Node in DB",
+				zap.String("uuid:id", tresult.(string)),
+			)
+			tresultSplit := strings.Split(tresult.(string), ":")
+			return tresultSplit[0], tresultSplit[1], nil
+		default:
+
+		}
 	}
-	logger.Info("Node in DB",
-		zap.String("uuid:id", tresult.(string)),
-	)
-	tresultSplit := strings.Split(tresult.(string), ":")
-	return tresultSplit[0], tresultSplit[1], nil
+	return "", "", err
 }
 
 func (c *Controller) PushRelation(logger *zap.Logger, dto *RelationDTO) (uuid string, id string, err error) {
@@ -140,44 +147,97 @@ func (c *Controller) PushRelation(logger *zap.Logger, dto *RelationDTO) (uuid st
 	return "", "", err
 }
 
-func (c *Controller) PushItem(logger *zap.Logger, item storage.Item) (string, string, error) {
-	//TODO need to push all items atonce, because need to create all nodes first and edges after.
-	logger.Info("pushing item",
-		zap.String("UUID", item.UUID),
-		zap.Int("ID", item.ID),
-	)
+// TODO: decom this
+//func (c *Controller) PushItem(logger *zap.Logger, item storage.Item) (string, string, error) {
+//	//TODO need to push all items atonce, because need to create all nodes first and edges after.
+//	logger.Info("pushing item",
+//		zap.String("UUID", item.UUID),
+//		zap.Int("ID", item.ID),
+//	)
+//
+//	if item.Class == "lines" {
+//		uuid, id, err := c.PushRelation(logger, relationItemAdapter(item))
+//		if err != nil {
+//			logger.Error("failed to create relation",
+//				zap.String("UUID", item.UUID),
+//				zap.Int("ID", item.ID),
+//				zap.Error(err),
+//			)
+//			return "", "", err
+//		}
+//		return uuid, id, nil
+//	}
+//	_, cAllowed := drawio.ItemAvailableClass[item.Class]
+//	if item.Class != "lines" && cAllowed == true {
+//		uuid, id, err := c.PushNode(logger, nodeItemAdapter(item))
+//		if err != nil {
+//			logger.Error("failed to create node",
+//				zap.String("UUID", item.UUID),
+//				zap.Int("ID", item.ID),
+//				zap.Error(err),
+//			)
+//			return "", "", err
+//		}
+//		return uuid, id, nil
+//	}
+//	return "", "", fmt.Errorf("item is not a node and not an edge")
+//}
 
-	if item.Class == "lines" {
-		uuid, id, err := c.PushRelation(logger, relationItemAdapter(item))
-		if err != nil {
-			logger.Error("failed to create relation",
-				zap.String("UUID", item.UUID),
-				zap.Int("ID", item.ID),
-				zap.Error(err),
+// PushItems reads data from channel, pushes Nodes first, and then relations
+func (c *Controller) PushItems(logger *zap.Logger, items <-chan drawio.Item) (err error) {
+	itemsParsed := 0
+	relChanQueue := make(chan drawio.Item, relationQueueSize)
+
+	nodeChan := make(chan drawio.Item)
+
+	for range items {
+		select {
+		case item := <-items:
+			node, err := IsNode(&item)
+			if err != nil {
+				logger.Error("error",
+					zap.Error(err),
+				)
+				continue
+			}
+			if node {
+				nodeChan <- item
+				logger.Debug("Pushing node",
+					zap.String("uuid", item.UUID),
+					zap.Int("id", item.ID),
+				)
+			} else {
+				relChanQueue <- item
+				logger.Debug("Sending relation to wait queue",
+					zap.String("uuid", item.UUID),
+					zap.Int("id", item.ID),
+				)
+			}
+
+			itemsParsed++
+			logger.Debug("item parsed",
+				zap.String("uuid", item.UUID),
+				zap.Int("id", item.ID),
 			)
-			return "", "", err
+		default:
+
 		}
-		return uuid, id, nil
 	}
-	_, cAllowed := drawio.ItemAvailableClass[item.Class]
-	if item.Class != "lines" && cAllowed == true {
-		uuid, id, err := c.PushNode(logger, nodeItemAdapter(item))
-		if err != nil {
-			logger.Error("failed to create node",
-				zap.String("UUID", item.UUID),
-				zap.Int("ID", item.ID),
-				zap.Error(err),
-			)
-			return "", "", err
-		}
-		return uuid, id, nil
-	}
-	return "", "", fmt.Errorf("item is not a node and not an edge")
+
+	return nil
 }
 
-func (c *Controller) PushDiagram(logger *zap.Logger, diagram io.Reader) (uuid string, err error) {
-
-	return uuid, nil
+func IsNode(item *drawio.Item) (bool, error) {
+	_, ok := drawio.ItemAvailableClass[item.Class]
+	if !ok {
+		return false, fmt.Errorf("item class %s is not supported", item.Class)
+	}
+	isNode := item.Class != drawio.ItemClassLines
+	if ok && isNode {
+		return true, nil
+	} else {
+		return false, nil
+	}
 }
 
 //func NewDTO(mx *MxCell, uuid string) (interface{}, error) {

@@ -126,12 +126,11 @@ func TestNeo4jController_PushNode(t *testing.T) {
 	nj, err := NewNeo4j(logger, cfg)
 	assert.NoError(t, err)
 	t.Run("push node", func(t *testing.T) {
-		uuid, id, err := nj.PushItem(logger, item)
+		//uuid, id, err := nj.PushItems(logger, nil)
 		assert.NoError(t, err)
-		t.Logf("%s-%s", uuid, id)
+		//t.Logf("%s-%s", uuid, id)
 	})
 }
 
-func TestNeo4jController_PushRelation(t *testing.T) {
-
+func TestController_PushItems(t *testing.T) {
 }
