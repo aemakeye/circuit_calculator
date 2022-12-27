@@ -13,6 +13,7 @@ kind-rm-ingress:
 	kubectl delete -f k8s/kind/ingress-nginx.yaml;
 
 kind-neo4j:
+	kubectl apply -f k8s/manifests/neo4j_secrets.yaml
 	kubectl apply -f k8s/manifests/neo4j.yaml
 kind-neo4j-rm:
 	kubectl delete -f k8s/manifests/neo4j.yaml
