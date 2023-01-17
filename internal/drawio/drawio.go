@@ -32,7 +32,7 @@ type Controller struct {
 
 type Item struct {
 	UUID     string
-	ID       int
+	EID      int
 	Value    string
 	Class    string
 	SubClass string
@@ -42,6 +42,7 @@ type Item struct {
 	ExitY    float32
 	EntryX   float32
 	EntryY   float32
+	Props    map[string]interface{}
 }
 
 var instance *Controller
@@ -178,7 +179,7 @@ func (c *Controller) XmlToItems(ctx context.Context, logger *zap.Logger, xmldoc 
 func ItemsAdapter(item ItemDTO) Item {
 	return Item{
 		UUID:     item.UUID,
-		ID:       item.ID,
+		EID:      item.ID,
 		Value:    item.Value,
 		Class:    item.Class,
 		SubClass: item.SubClass,

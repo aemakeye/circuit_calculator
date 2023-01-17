@@ -310,7 +310,7 @@ func TestController_XmlToItems(t *testing.T) {
 					select {
 					case di := <-ch:
 						itemsFound++
-						t.Logf("elements found %v, id %v", itemsFound, di.ID)
+						t.Logf("elements found %v, id %v", itemsFound, di.EID)
 					default:
 
 					}

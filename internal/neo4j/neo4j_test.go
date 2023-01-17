@@ -1,37 +1,24 @@
 package neo4j
 
 import (
-	"bytes"
-	"github.com/aemakeye/circuit_calculator/internal/config"
-	"github.com/aemakeye/circuit_calculator/internal/storage"
+	"fmt"
+	"github.com/aemakeye/circuit_calculator/internal/drawio"
 	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
 	"testing"
 )
 
+const (
+	url      = "127.0.0.1:7687"
+	user     = "neo4j"
+	password = "password"
+)
+
+var ctrlr, _ = NewController(zap.NewNop(), url, user, password)
+
 func TestNeo4jBasic(t *testing.T) {
-	var n4jconfig = []byte(`
-			{
-              "loglevel": "INFO",
-			  "neo4j":
-			  {
-				"host": "localhost",
-				"port": "7687",
-				"user": "neo4j",
-				"password": "password",
-				"schema": ""
-			  },
-			  "minio":
-			  {  	
-				"host": "localhost",
-				"port": "1234",
-				"user": "minio",
-				"password": "password",
-				"schema": ""
-			  }
-			}
-			`)
+
 	tests := []struct {
 		name    string
 		cypherq string
@@ -58,20 +45,12 @@ func TestNeo4jBasic(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			logger := zap.NewNop()
-			n4jconfigReader := bytes.NewReader(n4jconfig)
-			cfg, err := config.NewConfig(logger, n4jconfigReader)
-			assert.NoError(t, err)
 
-			driver, err := neo4j.NewDriver("bolt://"+cfg.Neo4j.Endpoint,
-				neo4j.BasicAuth(cfg.Neo4j.User, cfg.Neo4j.Password, ""))
-			assert.NoError(t, err)
-			defer driver.Close()
-
+			driver := ctrlr.Driver
 			session := driver.NewSession(neo4j.SessionConfig{AccessMode: neo4j.AccessModeWrite})
 			defer session.Close()
 
-			_, err = session.WriteTransaction(
+			_, err := session.WriteTransaction(
 				func(tx neo4j.Transaction) (interface{}, error) {
 					result, err := tx.Run(
 						test.cypherq,
@@ -86,6 +65,7 @@ func TestNeo4jBasic(t *testing.T) {
 					return nil, err
 				},
 			)
+			assert.NoError(t, err)
 
 		})
 	}
@@ -93,44 +73,140 @@ func TestNeo4jBasic(t *testing.T) {
 }
 
 func TestNeo4jController_PushNode(t *testing.T) {
-	item := storage.Item{
-		UUID:     "eopifrnv-dlfkvn-dklfv",
-		ID:       6,
-		Value:    "",
-		Class:    "resistors",
-		SubClass: "resistor_1",
-		SourceId: 0,
-		TargetId: 0,
-		ExitX:    0,
-		ExitY:    0,
-		EntryX:   0,
-		EntryY:   0,
+
+	var input []drawio.Item
+	for i := 1; i < 9; i++ {
+		input = append(input, drawio.Item{
+			UUID:     "eopifrnv-dlfkvn-dklfv",
+			EID:      i,
+			Class:    "resistors",
+			SubClass: "resistor_1",
+		})
 	}
-	var n4jconfig = []byte(`
-			{
-              "loglevel": "INFO",
-			  "neo4j":
-			  {
-				"host": "localhost",
-				"port": "7687",
-				"user": "neo4j",
-				"password": "password",
-				"schema": ""
-			  }
-			}
-			`)
+
 	logger := zap.NewNop()
-	n4jconfigReader := bytes.NewReader(n4jconfig)
-	cfg, err := config.NewConfig(logger, n4jconfigReader)
-	assert.NoError(t, err)
-	nj, err := NewNeo4j(logger, cfg)
-	assert.NoError(t, err)
-	t.Run("push node", func(t *testing.T) {
-		//uuid, id, err := nj.PushItems(logger, nil)
-		assert.NoError(t, err)
-		//t.Logf("%s-%s", uuid, id)
+	ichan := make(chan drawio.Item)
+	rchan := make(chan pushResult)
+
+	t.Run("push node, expected 8", func(t *testing.T) {
+		pushedNodesCount := 0
+		go ctrlr.PushNodes(logger, ichan, rchan)
+
+		go func(tt *testing.T, rch chan pushResult) {
+			for v := range rch {
+				assert.NoError(tt, v.error)
+			}
+		}(t, rchan)
+
+		for _, v := range input {
+			ichan <- v
+			pushedNodesCount++
+		}
+
+		close(ichan)
+		close(rchan)
+		assert.Equal(t, 8, pushedNodesCount)
 	})
 }
 
-func TestController_PushItems(t *testing.T) {
+func TestController_PushRelation(t *testing.T) {
+	//TODO: tests do not work if run by single button. FIX this. now please run one by one
+	logger := zap.NewNop()
+	var nodeInput, rinput []drawio.Item
+	for i := 1; i < 9; i++ {
+		nodeInput = append(nodeInput, drawio.Item{
+			UUID:     "eopifrnv-dlfkvn-dklfv",
+			EID:      i,
+			Class:    drawio.ItemClassResistors,
+			SubClass: "resistor_1",
+		})
+	}
+
+	for i := 0; i < 9; i++ {
+		rinput = append(rinput, drawio.Item{
+			UUID:     "eopifrnv-dlfkvn-dklfv",
+			EID:      0,
+			Value:    "",
+			Class:    drawio.ItemClassLines,
+			SubClass: "",
+			SourceId: i,
+			TargetId: i + 1,
+			ExitX:    0,
+			ExitY:    0,
+			EntryX:   0,
+			EntryY:   0,
+		})
+	}
+
+	ichan := make(chan drawio.Item)
+	relchan := make(chan drawio.Item)
+	reschan := make(chan pushResult)
+	reschan2 := make(chan pushResult)
+
+	tests := []struct {
+		Name          string
+		ExpectedError error
+		Relations     []drawio.Item
+		Reschan       chan pushResult
+	}{
+		{
+			"missing node for relation",
+			fmt.Errorf("neo4j transaction failed, empty return value"),
+			[]drawio.Item{rinput[0]},
+			reschan,
+		},
+		{
+			"all good",
+			nil,
+			rinput[1:],
+			reschan2,
+		},
+	}
+
+	go func(tt *testing.T, rch chan pushResult) {
+		for v := range rch {
+			assert.NoError(tt, v.error)
+		}
+	}(t, reschan)
+
+	go func(chan drawio.Item) {
+		ctrlr.PushNodes(logger, ichan, reschan)
+	}(ichan)
+
+	for _, item := range nodeInput {
+		t.Logf("pushing node id: %d", item.EID)
+		ichan <- item
+	}
+
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+
+			//check pushResult.error value
+			go func(tt *testing.T, rch chan pushResult) {
+				for v := range rch {
+					if test.ExpectedError != nil {
+						t.Logf("entered error branch")
+						assert.EqualError(tt, v.error, test.ExpectedError.Error())
+					} else {
+						assert.NoError(tt, v.error)
+					}
+
+				}
+
+			}(t, test.Reschan)
+
+			go func(chan drawio.Item) {
+				ctrlr.PushRelation(logger, relchan, reschan)
+			}(relchan)
+
+			for _, item := range test.Relations {
+				t.Logf("pushing relation with source %d and dest %d", item.SourceId, item.TargetId)
+				relchan <- item
+			}
+		})
+	}
+	close(ichan)
+	close(relchan)
+	close(reschan)
+	//close(reschan2)
 }

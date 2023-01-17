@@ -1,150 +1,209 @@
 package neo4j
 
 import (
+	"bytes"
 	"fmt"
-	"github.com/aemakeye/circuit_calculator/internal/config"
 	"github.com/aemakeye/circuit_calculator/internal/drawio"
-	"github.com/aemakeye/circuit_calculator/internal/storage"
 	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
+	"github.com/neo4j/neo4j-go-driver/v4/neo4j/dbtype"
 	"go.uber.org/zap"
-	"strings"
 	"sync"
 	"text/template"
 )
 
 const (
 	relationQueueSize = 100
+	schemaUUID        = "uuid"
+	schemaID          = "eid"
+	schemaValue       = "Value"
+	schemaClass       = "Class"
+	schemaSubClass    = "SubClass"
 )
 
 type Controller struct {
-	Logger *zap.Logger
-	Config neo4j.Config
-	Driver *neo4j.Driver
+	Logger   *zap.Logger
+	Driver   neo4j.Driver
+	user     string
+	password string
+	url      string
+}
+
+type pushResult struct {
+	uuid  string
+	id    int
+	error error
 }
 
 var instance *Controller
 var once sync.Once
 
-func NewNeo4j(logger *zap.Logger, c *config.CConfig) (dbc *Controller, err error) {
+func NewController(logger *zap.Logger, url string, user string, password string) (dbc *Controller, err error) {
 	once.Do(func() {
 		logger.Info("creating neo4j controlling structure")
 		instance = &Controller{}
 	})
 
 	//TODO recall to close driver properly
-	driver, err := neo4j.NewDriver("bolt://"+c.Neo4j.Endpoint,
-		neo4j.BasicAuth(c.Neo4j.User, c.Neo4j.Password, ""))
+	driver, err := neo4j.NewDriver("bolt://"+url,
+		neo4j.BasicAuth(user, password, ""))
 	if err != nil {
 		logger.Error("failed to create neo4j driver instance",
 			zap.Error(err),
 		)
 		return &Controller{
-			Logger: nil,
-			Config: neo4j.Config{},
-			Driver: nil,
+			Logger:   logger,
+			Driver:   driver,
+			user:     user,
+			password: password,
+			url:      url,
 		}, err
 	}
 
-	instance.Driver = &driver
+	instance.Driver = driver
 	return instance, nil
 }
 
-// decision on element type is based on Class attribute value and made externally for this func
-func nodeItemAdapter(item storage.Item) *NodeDTO {
-	return &NodeDTO{
-		UUID:     item.UUID,
-		ID:       item.ID,
-		Value:    item.Value,
-		Class:    item.Class,
-		SubClass: item.SubClass,
-	}
-}
-
-// decision on element type is based on Class attribute value and made externally for this func
-func relationItemAdapter(item storage.Item) *RelationDTO {
-	return &RelationDTO{
-		UUID:     item.UUID,
-		ID:       item.ID,
-		SourceId: item.SourceId,
-		TargetId: item.TargetId,
-		ExitX:    item.ExitX,
-		ExitY:    item.ExitY,
-		EntryX:   item.EntryX,
-		EntryY:   item.EntryY,
-	}
-}
-
-func (c *Controller) PushNodes(logger *zap.Logger, chitem <-chan drawio.Item) (uuid string, id string, err error) {
-	driver := *c.Driver
+func (c *Controller) PushNodes(logger *zap.Logger, chitem <-chan drawio.Item, pr chan pushResult) {
+	driver := c.Driver
 	session := driver.NewSession(neo4j.SessionConfig{AccessMode: neo4j.AccessModeWrite})
 	defer session.Close()
 
-	for {
-		select {
-		case item := <-chitem:
-			cypherq := "MERGE (item:Element {" +
-				"uuid: '" + item.UUID + "', " +
-				"id: '" + fmt.Sprintf("%d", item.ID) + "', " +
-				"Value: '" + item.Value + "', " +
-				"Class: '" + item.Class + "', " +
-				"SubClass: '" + item.SubClass + "'" +
-				"}) " +
-				"RETURN COALESCE(item.uuid,\"\")+':'+COALESCE(item.id,\"\")"
+	for item := range chitem {
+		cypherq := "MERGE (item:Element {" +
+			schemaUUID + ": '" + item.UUID + "', " +
+			schemaID + ": '" + fmt.Sprintf("%d", item.EID) + "', " +
+			schemaValue + ": '" + item.Value + "', " +
+			schemaClass + ": '" + item.Class + "', " +
+			schemaSubClass + ": '" + item.SubClass + "'" +
+			"}) " +
+			"RETURN COALESCE(item.uuid,\"\")+':'+COALESCE(item.id,\"\")"
 
-			tresult, err := session.WriteTransaction(
-				func(tx neo4j.Transaction) (interface{}, error) {
-					result, e := tx.Run(
-						cypherq, map[string]interface{}{},
-					)
-					_ = result
-					if e != nil {
-						return nil, e
-					}
-					if result.Next() {
-						return result.Record().Values[0], nil
-					}
-					return nil, nil
-				},
-			)
-			if err != nil {
-				logger.Error("error on transaction",
-					zap.Error(err),
+		tresult, err := session.WriteTransaction(
+			func(tx neo4j.Transaction) (interface{}, error) {
+				result, e := tx.Run(
+					cypherq, map[string]interface{}{},
 				)
-				return "", "", err
-			}
-			logger.Info("Node in DB",
-				zap.String("uuid:id", tresult.(string)),
+				if e != nil {
+					return nil, e
+				}
+				if result.Next() {
+					return result.Record().Values[0], nil
+				}
+				return nil, nil
+			},
+		)
+		if err != nil {
+			logger.Error("error on transaction",
+				zap.Error(err),
 			)
-			tresultSplit := strings.Split(tresult.(string), ":")
-			return tresultSplit[0], tresultSplit[1], nil
-		default:
-
+			pr <- pushResult{
+				uuid:  item.UUID,
+				id:    item.EID,
+				error: err,
+			}
+			continue
 		}
+		logger.Info("Node in DB",
+			zap.String("uuid:id", tresult.(string)),
+		)
+		//tresultSplit := strings.Split(tresult.(string), ":")
+		//id, err := strconv.Atoi(tresultSplit[1])
+		pr <- pushResult{
+			uuid:  item.UUID,
+			id:    item.EID,
+			error: nil,
+		}
+
 	}
-	return "", "", err
 }
 
-func (c *Controller) PushRelation(logger *zap.Logger, dto *RelationDTO) (uuid string, id string, err error) {
+func (c *Controller) PushRelation(logger *zap.Logger, chitem <-chan drawio.Item, pr chan pushResult) {
+	driver := c.Driver
+	session := driver.NewSession(neo4j.SessionConfig{AccessMode: neo4j.AccessModeWrite})
+	defer session.Close()
+
+	var tbuf []byte
+	twrbuf := bytes.NewBuffer(tbuf)
 	//TODO: return (specific) error if no source or target for relation/edge
 	//https://neo4j.com/docs/cypher-manual/current/clauses/merge/#merge-merge-on-a-relationship
-	cypherqTemplate := template.New("pushRelation")
-	cypherqTemplate, err = cypherqTemplate.Parse(`MATCH
-		(source:Element {uuid: '{{.uuid'}, id: '{{.sourceId}}')})
-		(target:Element {uuid: '{{.uuid'}, id: '{{.targetId}}')})
+	for item := range chitem {
+		twrbuf.Reset()
+		cypherqTemplate := template.New("pushRelation")
+		cypherqTemplate, err := cypherqTemplate.Parse(`MATCH
+		(source:Element {` + schemaUUID + `: '{{.UUID}}', ` + schemaID + `: '{{.SourceId}}' }),
+		(target:Element {` + schemaUUID + `: '{{.UUID}}', ` + schemaID + `: '{{.TargetId}}' })
 		MERGE (source) - [r:connected] - (target)
 		RETURN r
-		`,
-	)
-	if err != nil {
-		logger.Error("error while creating relation between elements",
-			zap.String("uuid", dto.UUID),
-			zap.Int("source id", dto.SourceId),
-			zap.Int("target id", dto.TargetId),
-			zap.Error(err),
+		`)
+
+		err = cypherqTemplate.Execute(twrbuf, item)
+		if err != nil {
+			logger.Error("failed to render cypher query template",
+				zap.Error(err),
+			)
+			continue
+		}
+
+		tresult, err := session.WriteTransaction(
+			func(tx neo4j.Transaction) (interface{}, error) {
+				result, e := tx.Run(
+					twrbuf.String(), map[string]interface{}{},
+				)
+				if e != nil {
+					return nil, e
+				}
+				//in case relation created, dbtype.Relationship is returned.
+				//let us convert it to drawio.Item ant return
+				if result.Next() {
+					r := result.Record().Values[0]
+					return drawio.Item{
+						UUID:     item.UUID,
+						EID:      int(r.(dbtype.Relationship).Id),
+						Value:    "",
+						Class:    drawio.ItemClassLines,
+						SubClass: "",
+						SourceId: int(r.(dbtype.Relationship).StartId),
+						TargetId: int(r.(dbtype.Relationship).EndId),
+						ExitX:    0,
+						ExitY:    0,
+						EntryX:   0,
+						EntryY:   0,
+						Props:    r.(dbtype.Relationship).Props,
+					}, nil
+				}
+				logger.Error("neo4j transaction failed, empty return value for relation ",
+					zap.Ints("SourceID, TargetID", []int{item.SourceId, item.TargetId}),
+				)
+				return nil, fmt.Errorf("neo4j transaction failed, empty return value for relation")
+			},
 		)
-		return "", "", err
+
+		if err != nil {
+			logger.Error("error while creating relation between elements",
+				zap.String("uuid", item.UUID),
+				zap.Int("source id", item.SourceId),
+				zap.Int("target id", item.TargetId),
+				zap.Error(err),
+			)
+			pr <- pushResult{
+				uuid:  item.UUID,
+				id:    0,
+				error: err,
+			}
+			continue
+		}
+		logger.Info("relation pushed",
+			zap.Ints("Source id: %d, Target id: %d",
+				[]int{tresult.(drawio.Item).SourceId, tresult.(drawio.Item).TargetId}),
+		)
+		//tresultSplit := strings.Split(tresult.(string), ":")
+		//id, err := strconv.Atoi(tresultSplit[1])
+		pr <- pushResult{
+			uuid:  item.UUID,
+			id:    item.EID,
+			error: nil,
+		}
 	}
-	return "", "", err
 }
 
 // TODO: decom this
@@ -152,7 +211,7 @@ func (c *Controller) PushRelation(logger *zap.Logger, dto *RelationDTO) (uuid st
 //	//TODO need to push all items atonce, because need to create all nodes first and edges after.
 //	logger.Info("pushing item",
 //		zap.String("UUID", item.UUID),
-//		zap.Int("ID", item.ID),
+//		zap.Int("EID", item.EID),
 //	)
 //
 //	if item.Class == "lines" {
@@ -160,7 +219,7 @@ func (c *Controller) PushRelation(logger *zap.Logger, dto *RelationDTO) (uuid st
 //		if err != nil {
 //			logger.Error("failed to create relation",
 //				zap.String("UUID", item.UUID),
-//				zap.Int("ID", item.ID),
+//				zap.Int("EID", item.EID),
 //				zap.Error(err),
 //			)
 //			return "", "", err
@@ -173,7 +232,7 @@ func (c *Controller) PushRelation(logger *zap.Logger, dto *RelationDTO) (uuid st
 //		if err != nil {
 //			logger.Error("failed to create node",
 //				zap.String("UUID", item.UUID),
-//				zap.Int("ID", item.ID),
+//				zap.Int("EID", item.EID),
 //				zap.Error(err),
 //			)
 //			return "", "", err
@@ -204,20 +263,20 @@ func (c *Controller) PushItems(logger *zap.Logger, items <-chan drawio.Item) (er
 				nodeChan <- item
 				logger.Debug("Pushing node",
 					zap.String("uuid", item.UUID),
-					zap.Int("id", item.ID),
+					zap.Int("id", item.EID),
 				)
 			} else {
 				relChanQueue <- item
 				logger.Debug("Sending relation to wait queue",
 					zap.String("uuid", item.UUID),
-					zap.Int("id", item.ID),
+					zap.Int("id", item.EID),
 				)
 			}
 
 			itemsParsed++
 			logger.Debug("item parsed",
 				zap.String("uuid", item.UUID),
-				zap.Int("id", item.ID),
+				zap.Int("id", item.EID),
 			)
 		default:
 
@@ -247,7 +306,7 @@ func IsNode(item *drawio.Item) (bool, error) {
 //		shapeNameKind := shapeNameArr[len(shapeNameArr)-2]
 //		el := EElementDTO{
 //			UUID:  uuid,
-//			ID:    mx.Id,
+//			EID:    mx.Id,
 //			Value: mx.Value,
 //			Kind:  shapeNameKind,
 //			Type:  shapeNameArr[len(shapeNameArr)-1],
@@ -276,7 +335,7 @@ func IsNode(item *drawio.Item) (bool, error) {
 //
 //		el := LineDTO{
 //			UUID:     uuid,
-//			ID:       mx.Id,
+//			EID:       mx.Id,
 //			SourceId: mx.Source,
 //			TargetId: mx.Target,
 //			ExitX:    float32(ExitX),
