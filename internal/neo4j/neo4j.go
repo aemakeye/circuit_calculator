@@ -28,12 +28,6 @@ type Controller struct {
 	url      string
 }
 
-type pushResult struct {
-	uuid  string
-	id    int
-	error error
-}
-
 var instance *Controller
 var once sync.Once
 
@@ -63,7 +57,7 @@ func NewController(logger *zap.Logger, url string, user string, password string)
 	return instance, nil
 }
 
-func (c *Controller) PushNodes(logger *zap.Logger, chitem <-chan drawio.Item, pr chan pushResult, noMoreNodes chan struct{}) {
+func (c *Controller) PushNodes(logger *zap.Logger, chitem <-chan drawio.Item, pr chan drawio.Item, noMoreNodes chan struct{}) {
 	driver := c.Driver
 	session := driver.NewSession(neo4j.SessionConfig{AccessMode: neo4j.AccessModeWrite})
 	defer func() {
@@ -107,22 +101,15 @@ func (c *Controller) PushNodes(logger *zap.Logger, chitem <-chan drawio.Item, pr
 					logger.Error("error on transaction",
 						zap.Error(err),
 					)
-					pr <- pushResult{
-						uuid:  item.UUID,
-						id:    item.EID,
-						error: err,
-					}
+					item.Error = err
+					pr <- item
 					continue
 				}
 				logger.Info("Node in DB",
 					zap.String("uuid:id", tresult.(string)),
 				)
 
-				pr <- pushResult{
-					uuid:  item.UUID,
-					id:    item.EID,
-					error: nil,
-				}
+				pr <- item
 			}
 		case <-noMoreNodes:
 			logger.Info("parsed all nodes")
@@ -133,7 +120,7 @@ func (c *Controller) PushNodes(logger *zap.Logger, chitem <-chan drawio.Item, pr
 	}
 }
 
-func (c *Controller) PushRelations(logger *zap.Logger, chitem <-chan drawio.Item, pr chan pushResult, noMoreRels chan struct{}) {
+func (c *Controller) PushRelations(logger *zap.Logger, chitem <-chan drawio.Item, pr chan drawio.Item, noMoreRels chan struct{}) {
 	driver := c.Driver
 	session := driver.NewSession(neo4j.SessionConfig{AccessMode: neo4j.AccessModeWrite})
 	defer func() {
@@ -208,22 +195,15 @@ func (c *Controller) PushRelations(logger *zap.Logger, chitem <-chan drawio.Item
 						zap.Int("target id", item.TargetId),
 						zap.Error(err),
 					)
-					pr <- pushResult{
-						uuid:  item.UUID,
-						id:    0,
-						error: err,
-					}
+					item.Error = err
+					pr <- item
 					continue
 				}
 				logger.Info("relation pushed",
 					zap.Ints("Source id: %d, Target id: %d",
 						[]int{tresult.(drawio.Item).SourceId, tresult.(drawio.Item).TargetId}),
 				)
-				pr <- pushResult{
-					uuid:  item.UUID,
-					id:    item.EID,
-					error: nil,
-				}
+				pr <- item
 			}
 		case <-noMoreRels:
 			return
@@ -235,7 +215,7 @@ func (c *Controller) PushRelations(logger *zap.Logger, chitem <-chan drawio.Item
 }
 
 // PushItems reads data from channel, pushes Nodes first, and then Relations
-func (c *Controller) PushItems(logger *zap.Logger, items <-chan drawio.Item, pr chan pushResult, noMoreItems chan struct{}) {
+func (c *Controller) PushItems(logger *zap.Logger, items <-chan drawio.Item, pr chan drawio.Item, noMoreItems chan struct{}) {
 	defer close(pr)
 	relChanQueue := make(chan drawio.Item, relationQueueSize)
 	relChanQueueItems := 0

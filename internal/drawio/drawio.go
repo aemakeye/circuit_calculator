@@ -43,6 +43,7 @@ type Item struct {
 	EntryX   float32
 	EntryY   float32
 	Props    map[string]interface{}
+	Error    error
 }
 
 var instance *Controller

@@ -92,7 +92,7 @@ func TestNeo4jController_PushNode(t *testing.T) {
 
 	logger := zap.NewNop()
 	ichan := make(chan drawio.Item)
-	rchan := make(chan pushResult)
+	rchan := make(chan drawio.Item)
 
 	t.Run("push node, expected 8", func(t *testing.T) {
 		pushedNodesCount := 0
@@ -111,7 +111,7 @@ func TestNeo4jController_PushNode(t *testing.T) {
 			if ok {
 				pushedNodesCount++
 			}
-			t.Logf("result id %d", r.id)
+			t.Logf("result id %d", r.EID)
 
 			//time.Sleep(1 * time.Second)
 		}
@@ -152,14 +152,14 @@ func TestController_PushRelation(t *testing.T) {
 
 	ichan := make(chan drawio.Item)
 	relchan := make(chan drawio.Item)
-	reschan := make(chan pushResult)
-	reschan2 := make(chan pushResult)
+	reschan := make(chan drawio.Item)
+	reschan2 := make(chan drawio.Item)
 
 	tests := []struct {
 		Name          string
 		ExpectedError error
 		Relations     []drawio.Item
-		Reschan       chan pushResult
+		Reschan       chan drawio.Item
 	}{
 		{
 			"missing node for relation",
@@ -181,7 +181,7 @@ func TestController_PushRelation(t *testing.T) {
 		t.Logf("pushing node id: %d", item.EID)
 		ichan <- item
 		res := <-reschan
-		assert.NoError(t, res.error)
+		assert.NoError(t, res.Error)
 	}
 
 	for _, test := range tests {
@@ -201,9 +201,9 @@ func TestController_PushRelation(t *testing.T) {
 				res := <-reschan
 				if test.ExpectedError != nil {
 					t.Logf("entered error branch")
-					assert.EqualError(t, res.error, test.ExpectedError.Error())
+					assert.EqualError(t, res.Error, test.ExpectedError.Error())
 				} else {
-					assert.NoError(t, res.error)
+					assert.NoError(t, res.Error)
 				}
 			}
 			noMoreRels <- struct{}{}
@@ -243,7 +243,7 @@ func TestController_PushItems(t *testing.T) {
 	}
 
 	ichan := make(chan drawio.Item)
-	reschan := make(chan pushResult, 100)
+	reschan := make(chan drawio.Item, 100)
 
 	rand.Seed(time.Now().UnixNano())
 	perm := rand.Perm(len(input))
@@ -256,7 +256,7 @@ func TestController_PushItems(t *testing.T) {
 		Name          string
 		ExpectedError error
 		items         []drawio.Item
-		Reschan       chan pushResult
+		Reschan       chan drawio.Item
 	}{
 		{
 			"all good",
@@ -287,9 +287,9 @@ func TestController_PushItems(t *testing.T) {
 			for res := range reschan {
 				if test.ExpectedError != nil {
 					t.Logf("entered error branch")
-					assert.EqualError(t, res.error, test.ExpectedError.Error())
+					assert.EqualError(t, res.Error, test.ExpectedError.Error())
 				} else {
-					assert.NoError(t, res.error)
+					assert.NoError(t, res.Error)
 				}
 
 			}

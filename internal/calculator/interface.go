@@ -21,7 +21,7 @@ type ObjectStorage interface {
 type GraphStorage interface {
 	// TODO: decom PushItem
 	//PushItem(logger *zap.Logger, item storage.Item) (uuid string, id string, err error)
-	PushItems(logger *zap.Logger, items <-chan drawio.Item, pr chan interface{}, done chan<- struct{})
+	PushItems(logger *zap.Logger, items <-chan drawio.Item, pr chan drawio.Item, noMoreItems chan struct{})
 }
 
 type DiagramProcessor interface {
